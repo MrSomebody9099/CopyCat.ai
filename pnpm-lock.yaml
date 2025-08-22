@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@google/generative-ai':
+        specifier: ^0.24.1
+        version: 0.24.1
       '@vercel/functions':
         specifier: ^2.0.3
         version: 2.0.3
@@ -159,6 +162,10 @@ packages:
 
   '@frosted-ui/colors@0.0.1-canary.61':
     resolution: {integrity: sha512-fl+yihO8kxr7Q1w4z4rRwWePZtQOQoUx9fGkx1BhQx5e/mwEtyXOK8hTs+nu293xx7pjiub/zhzGszFIeofafw==}
+
+  '@google/generative-ai@0.24.1':
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
+    engines: {node: '>=18.0.0'}
 
   '@graphql-typed-document-node/core@3.2.0':
     resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
@@ -2361,6 +2368,8 @@ snapshots:
       tslib: 2.8.1
 
   '@frosted-ui/colors@0.0.1-canary.61': {}
+
+  '@google/generative-ai@0.24.1': {}
 
   '@graphql-typed-document-node/core@3.2.0(graphql@16.11.0)':
     dependencies:

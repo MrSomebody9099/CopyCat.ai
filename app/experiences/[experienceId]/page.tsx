@@ -1,47 +1,131 @@
-import { whopSdk } from "@/lib/whop-sdk";
-import { headers } from "next/headers";
+"use client";
+import { useEffect, useMemo, useState } from "react";
+// Whop SDK will be initialized on the client side
 
-export default async function ExperiencePage({
-	params,
-}: {
-	params: Promise<{ experienceId: string }>;
-}) {
-	// The headers contains the user token
-	const headersList = await headers();
+// Simple copy types & presets
+const COPY_TYPES = [
+  { id: "social", label: "Social Caption" },
+  { id: "ad", label: "Ad Headline" },
+  { id: "email", label: "Email Body" },
+  { id: "blog", label: "Blog Intro" },
+  { id: "hook", label: "Hook / Lead" },
+];
 
-	// The experienceId is a path param
-	const { experienceId } = await params;
+const TONES = ["Neutral", "Casual", "Professional", "Playful", "Luxury", "Bold"] as const;
+const LENGTHS = ["Short", "Medium", "Long"] as const;
 
-	// The user token is in the headers
-	const { userId } = await whopSdk.verifyUserToken(headersList);
+export default function Page() {
+  const [userName, setUserName] = useState<string>("");
+  const [brief, setBrief] = useState("");
+  const [type, setType] = useState(COPY_TYPES[0].id);
+  const [tone, setTone] = useState<(typeof TONES)[number]>("Neutral");
+  const [length, setLength] = useState<(typeof LENGTHS)[number]>("Medium");
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState("");
+  const disabled = useMemo(() => !brief.trim() || loading, [brief, loading]);
 
-	const result = await whopSdk.access.checkIfUserHasAccessToExperience({
-		userId,
-		experienceId,
-	});
+  useEffect(() => {
+    // Whop SDK will be available in the iframe context
+    // For now, we'll handle this gracefully
+    try {
+      // Check if we're in a Whop iframe
+      if (window.parent !== window) {
+        // We're in an iframe, likely Whop
+        setUserName("Whop User");
+      }
+    } catch {
+      // If not inside Whop, ignore
+    }
+  }, []);
 
-	const user = await whopSdk.users.getUser({ userId });
-	const experience = await whopSdk.experiences.getExperience({ experienceId });
+  async function generate() {
+    setLoading(true);
+    setOutput("");
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief, type, tone, length }),
+      });
+      if (!res.ok) throw new Error("Generation failed");
+      const data = await res.json();
+      setOutput(data.text || "");
+    } catch (e: any) {
+      setOutput("⚠️ Error generating copy. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-	// Either: 'admin' | 'customer' | 'no_access';
-	// 'admin' means the user is an admin of the whop, such as an owner or moderator
-	// 'customer' means the user is a common member in this whop
-	// 'no_access' means the user does not have access to the whop
-	const { accessLevel } = result;
+  function copy() {
+    if (!output) return;
+    navigator.clipboard.writeText(output);
+  }
 
-	return (
-		<div className="flex justify-center items-center h-screen px-8">
-			<h1 className="text-xl">
-				Hi <strong>{user.name}</strong>, you{" "}
-				<strong>{result.hasAccess ? "have" : "do not have"} access</strong> to
-				this experience. Your access level to this whop is:{" "}
-				<strong>{accessLevel}</strong>. <br />
-				<br />
-				Your user ID is <strong>{userId}</strong> and your username is{" "}
-				<strong>@{user.username}</strong>.<br />
-				<br />
-				You are viewing the experience: <strong>{experience.name}</strong>
-			</h1>
-		</div>
-	);
+  return (
+    <main className="min-h-screen p-6 sm:p-10">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <header className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">CopyCat AI 🐾</h1>
+            <p className="text-sm text-neutral-600">All-in-one AI copywriter for Whop communities {userName ? `— hi ${userName}!` : ""}</p>
+          </div>
+          <button className="button" onClick={generate} disabled={disabled}>
+            {loading ? "Generating…" : "Generate"}
+          </button>
+        </header>
+
+        <section className="card space-y-4">
+          <div>
+            <label className="label">What are we writing about? (product, offer, audience, goal)</label>
+            <textarea
+              className="input min-h-[120px]"
+              placeholder="e.g., Fitness coaching program for busy dads, goal: book a strategy call"
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="label">Copy type</label>
+              <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
+                {COPY_TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Tone</label>
+              <select className="select" value={tone} onChange={(e) => setTone(e.target.value as any)}>
+                {TONES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Length</label>
+              <select className="select" value={length} onChange={(e) => setLength(e.target.value as any)}>
+                {LENGTHS.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Output</h2>
+            <div className="flex items-center gap-2">
+              <button className="button" onClick={copy} disabled={!output}>Copy</button>
+            </div>
+          </div>
+          <div className="whitespace-pre-wrap rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm">
+            {output || "Your generated copy will appear here…"}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
 }

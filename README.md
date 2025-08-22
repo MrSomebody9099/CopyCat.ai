@@ -1,36 +1,116 @@
-This is a template for a whop app built in NextJS. Fork it and keep the parts you need for your app. 
+# CopyCat.ai - Whop App
 
-# Whop NextJS App Template
+A modern, beginner-friendly Whop application built with Next.js and the official Whop SDK.
 
-To run this project: 
+## ✨ Features
 
-1. Install dependencies with: `pnpm i`
+- **Dark Theme UI** - Beautiful black background with orange accents
+- **Whop Authentication** - Built-in user authentication and management
+- **Modern Design** - Clean, minimalist interface using Tailwind CSS
+- **Easy to Expand** - Well-structured codebase for future development
+- **TypeScript Support** - Full type safety and IntelliSense
 
-2. Create a Whop App on your [whop developer dashboard](https://whop.com/dashboard/developer/), then go to the "Hosting" section and:
-	- Ensure the "Base URL" is set to the domain you intend to deploy the site on.
-	- Ensure the "App path" is set to `/experiences/[experienceId]`
-	- Ensure the "Discover path" is set to `/discover` 
+## 🚀 Quick Start
 
-3. Copy the environment variables from the `.env.development` into a `.env.local`. Ensure to use real values from the whop dashboard.
+### 1. Install Dependencies
 
-4. Go to a whop created in the same org as the app you created. Navigate to the tools section and add your app.
+```bash
+pnpm install
+```
 
-5. Run `pnpm dev` to start the dev server. Then in the top right of the window find a translucent settings icon. Select "localhost". The default port 3000 should work.
+### 2. Set Up Environment Variables
 
-## Deploying
+Copy the `env.example` file to `.env` and fill in your Whop credentials:
 
-1. Upload your fork / copy of this template to github. 
+```bash
+cp env.example .env
+```
 
-2. Go to [Vercel](https://vercel.com/new) and link the repository. Deploy your application with the environment variables from your `.env.local`
+Then edit `.env` with your actual values from the [Whop Dashboard](https://whop.com/dashboard):
 
-3. If necessary update you "Base Domain" and webhook callback urls on the app settings page on the whop dashboard.
+```env
+# Required: Your Whop App API Key
+WHOP_API_KEY=your_actual_api_key_here
 
-## Troubleshooting
+# Required: Your Whop App ID  
+NEXT_PUBLIC_WHOP_APP_ID=your_actual_app_id_here
 
-**App not loading properly?** Make sure to set the "App path" in your Whop developer dashboard. The placeholder text in the UI does not mean it's set - you must explicitly enter `/experiences/[experienceId]` (or your chosen path name)
-a
+# Required: Your Whop Company ID
+NEXT_PUBLIC_WHOP_COMPANY_ID=your_actual_company_id_here
 
-**Make sure to add env.local** Make sure to get the real app environment vairables from your whop dashboard and set them in .env.local
+# Required: Agent User ID for API requests
+NEXT_PUBLIC_WHOP_AGENT_USER_ID=your_actual_agent_user_id_here
+```
 
+### 3. Run the Development Server
 
-For more info, see our docs at https://dev.whop.com/introduction
+```bash
+pnpm dev
+```
+
+**Important**: Always use `pnpm dev` (not `next dev`) to run the Whop proxy server.
+
+### 4. Access Your App
+
+- Open the Whop dashboard
+- Navigate to your app
+- The app will run in the Whop iframe with proper authentication
+
+## 🏗️ Project Structure
+
+```
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   ├── discover/          # Discover page
+│   ├── experiences/       # Experiences page
+│   ├── layout.tsx         # Root layout with WhopApp wrapper
+│   ├── page.tsx           # Main landing page
+│   └── globals.css        # Global styles
+├── lib/                   # Utility functions
+│   └── whop-sdk.ts       # Whop SDK configuration
+├── env.example            # Environment variables template
+└── package.json           # Dependencies and scripts
+```
+
+## 🔧 Key Components
+
+### WhopApp Wrapper
+The `WhopApp` component in `app/layout.tsx` provides authentication context throughout your app.
+
+### Whop SDK
+The `lib/whop-sdk.ts` file configures the Whop server SDK for API calls.
+
+### Authentication
+User authentication is handled automatically by the Whop SDK. Users are authenticated when they access your app through the Whop dashboard.
+
+## 🎨 Customization
+
+### Theme Colors
+The app uses a dark theme with orange accents:
+- Background: `bg-black`
+- Cards: `bg-gray-900` with `border-gray-800`
+- Accents: `bg-orange-500`, `text-orange-400`
+- Text: `text-white`, `text-gray-300`
+
+### Adding New Pages
+1. Create a new directory in `app/`
+2. Add a `page.tsx` file
+3. The page will automatically inherit the WhopApp wrapper and authentication
+
+### API Routes
+Add new API endpoints in `app/api/` directory. They'll have access to the Whop SDK for authenticated requests.
+
+## 📚 Resources
+
+- [Whop Developer Documentation](https://dev.whop.com)
+- [Whop Dashboard](https://whop.com/dashboard)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+
+## 🤝 Support
+
+Need help? Check out the [Whop Documentation](https://dev.whop.com) or reach out to the Whop developer community.
+
+## 📝 License
+
+This project is based on the official Whop Next.js template.
