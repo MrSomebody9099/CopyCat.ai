@@ -1,4 +1,4 @@
-
+we are building awhop app.
 Docs For LLMs
 Authentication
 Source: https://dev.whop.com/api-reference/graphql/authentication

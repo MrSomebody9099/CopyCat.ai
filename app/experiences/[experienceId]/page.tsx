@@ -42,16 +42,31 @@ export default function Page() {
     setLoading(true);
     setOutput("");
     try {
+      console.log("Calling generate API with:", { brief, type, tone, length });
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief, type, tone, length }),
       });
-      if (!res.ok) throw new Error("Generation failed");
+      
+      console.log("API response status:", res.status);
       const data = await res.json();
-      setOutput(data.text || "");
+      console.log("API response data:", data);
+      
+      if (!res.ok) {
+        // Show the actual error message from the API
+        setOutput(`⚠️ ${data.error || 'Generation failed'}`);
+        return;
+      }
+      
+      if (data.text) {
+        setOutput(data.text);
+      } else {
+        setOutput("⚠️ No content was generated. Please try again.");
+      }
     } catch (e: any) {
-      setOutput("⚠️ Error generating copy. Please try again.");
+      console.error("Frontend error:", e);
+      setOutput(`⚠️ Network error: ${e.message || 'Please check your connection and try again.'}`);
     } finally {
       setLoading(false);
     }
@@ -68,7 +83,7 @@ export default function Page() {
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">CopyCat AI 🐾</h1>
-            <p className="text-sm text-neutral-600">All-in-one AI copywriter for Whop communities {userName ? `— hi ${userName}!` : ""}</p>
+            <p className="text-sm text-slate-600">All-in-one AI copywriter for Whop communities {userName ? `— hi ${userName}!` : ""}</p>
           </div>
           <button className="button" onClick={generate} disabled={disabled}>
             {loading ? "Generating…" : "Generate"}
@@ -121,7 +136,7 @@ export default function Page() {
               <button className="button" onClick={copy} disabled={!output}>Copy</button>
             </div>
           </div>
-          <div className="whitespace-pre-wrap rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm">
+          <div className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
             {output || "Your generated copy will appear here…"}
           </div>
         </section>
