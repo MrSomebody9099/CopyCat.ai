@@ -22,9 +22,14 @@ export default function Page() {
   const [length, setLength] = useState<(typeof LENGTHS)[number]>("Medium");
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [conversation, setConversation] = useState<{role: string, content: string}[]>([]);
   const disabled = useMemo(() => !brief.trim() || loading, [brief, loading]);
 
   useEffect(() => {
+    // Generate a unique session ID for this user session
+    setSessionId(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+    
     // Whop SDK will be available in the iframe context
     // For now, we'll handle this gracefully
     try {
@@ -42,11 +47,15 @@ export default function Page() {
     setLoading(true);
     setOutput("");
     try {
-      console.log("Calling generate API with:", { brief, type, tone, length });
+      // Construct the user input based on the form values
+      const userInput = `Write ${length} ${type} copy with a ${tone} tone for: ${brief}`;
+      const sessionId = "user-123"; // Later: generate per user dynamically
+      
+      console.log("Calling generate API with:", { userInput, sessionId });
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief, type, tone, length }),
+        body: JSON.stringify({ userInput, sessionId }),
       });
       
       console.log("API response status:", res.status);
@@ -59,8 +68,8 @@ export default function Page() {
         return;
       }
       
-      if (data.text) {
-        setOutput(data.text);
+      if (data.output) {
+        setOutput(data.output);
       } else {
         setOutput("⚠️ No content was generated. Please try again.");
       }
