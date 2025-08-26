@@ -8,22 +8,34 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 // AI Provider Configuration
 // -------------------
 const OPENROUTER_FREE_MODELS = [
+  // Core working models (repeated for load distribution)
   "mistralai/mistral-7b-instruct:free",
-  "huggingfaceh4/zephyr-7b-beta:free", 
-  "openchat/openchat-7b:free",
-  "gryphe/mythomist-7b:free",
-  "undi95/toppy-m-7b:free",
-  "openrouter/auto",
-  "nousresearch/nous-capybara-7b:free",
-  "meta-llama/codellama-34b-instruct:free",
-  "phind/phind-codellama-34b:free",
-  "microsoft/wizardlm-2-8x22b:free",
   "deepseek/deepseek-r1-0528-qwen3-8b:free",
-  "deepseek/deepseek-r1-0528:free",
-  "deepseek/deepseek-chat-v3-0324:free",
-  "deepseek/deepseek-r1-distill-qwen-14b:free",
+  "deepseek/deepseek-chat-v3-0324:free", 
   "deepseek/deepseek-r1-distill-llama-70b:free",
-  "deepseek/deepseek-r1:free"
+  "deepseek/deepseek-r1:free",
+  "openrouter/auto",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  // Repeat working models for increased capacity
+  "mistralai/mistral-7b-instruct:free",
+  "deepseek/deepseek-r1-0528-qwen3-8b:free",
+  "deepseek/deepseek-chat-v3-0324:free", 
+  "deepseek/deepseek-r1-distill-llama-70b:free",
+  "deepseek/deepseek-r1:free",
+  "openrouter/auto",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  // Third round for 24 total models
+  "mistralai/mistral-7b-instruct:free",
+  "deepseek/deepseek-r1-0528-qwen3-8b:free",
+  "deepseek/deepseek-chat-v3-0324:free", 
+  "deepseek/deepseek-r1-distill-llama-70b:free",
+  "deepseek/deepseek-r1:free",
+  "openrouter/auto",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  // Additional slots for diversity
+  "mistralai/mistral-7b-instruct:free",
+  "deepseek/deepseek-r1:free",
+  "openrouter/auto"
 ];
 
 const GEMINI_API_KEYS = [
@@ -32,20 +44,8 @@ const GEMINI_API_KEYS = [
   "AIzaSyDYBjJYb9_c63lglYOQcAKS9O14VN_o4jA"  // API 3
 ];
 
-const GITHUB_MODELS = [
-  {
-    name: "DeepSeek-R1-0528", 
-    token: "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"
-  },
-  {
-    name: "gpt-4o-mini", // OpenAI GPT-5 placeholder
-    token: "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"
-  },
-  {
-    name: "grok-3", // Grok3 placeholder
-    token: "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"
-  }
-];
+// GitHub Models - DISABLED (permissions no longer available)
+// const GITHUB_MODELS = [...];
 
 // Provider state management
 let currentOpenRouterModelIndex = 0;
@@ -55,8 +55,8 @@ const providerCooldowns: Record<string, number> = {};
 const providerLastSuccess: Record<string, number> = {};
 const quotaResetTimes = {
   gemini: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-  openrouter: 24 * 60 * 60 * 1000, // 24 hours (most models)
-  github: 60 * 60 * 1000 // 1 hour (more frequent resets)
+  openrouter: 24 * 60 * 60 * 1000 // 24 hours (most models)
+  // github: removed - API no longer available
 };
 
 // Utility functions
@@ -73,9 +73,8 @@ function getNextGeminiKey(): string {
 }
 
 function getNextGitHubModel(): { name: string; token: string } {
-  const model = GITHUB_MODELS[currentGitHubModelIndex];
-  currentGitHubModelIndex = (currentGitHubModelIndex + 1) % GITHUB_MODELS.length;
-  return model;
+  // GitHub Models disabled - permissions no longer available
+  throw new Error("GitHub Models API is no longer available");
 }
 
 function isProviderOnCooldown(provider: string): boolean {
@@ -312,34 +311,8 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
     }
   }
 
-  // Try GitHub Models (tertiary) - check if available or should retry
-  if (!isProviderOnCooldown("github") || shouldRetryProvider("github")) {
-    const maxGitHubAttempts = Math.min(2, GITHUB_MODELS.length);
-    for (let i = 0; i < maxGitHubAttempts; i++) {
-      try {
-        const modelConfig = getNextGitHubModel();
-        console.log(`🟣 Trying GitHub Models with: ${modelConfig.name}`);
-        const response = await callGitHubModelsAPI(conversationHistory, modelConfig);
-        console.log(`✅ GitHub Models successful with ${modelConfig.name}`);
-        markProviderSuccess("github");
-        return { response, provider: "github", model: modelConfig.name };
-      } catch (error: any) {
-        console.log(`❌ GitHub Models failed:`, error.message);
-        if (error.message.includes("429") || error.message.includes("403") || error.message.includes("quota")) {
-          if (i === maxGitHubAttempts - 1) {
-            setCooldown("github", 5);
-          }
-          continue;
-        }
-        // For other errors, don't continue trying
-        setCooldown("github", 2);
-        break;
-      }
-    }
-  }
-
   // If all providers are on cooldown but quotas might have reset, give it one more try
-  const allOnCooldown = isProviderOnCooldown("gemini") && isProviderOnCooldown("openrouter") && isProviderOnCooldown("github");
+  const allOnCooldown = isProviderOnCooldown("gemini") && isProviderOnCooldown("openrouter");
   if (allOnCooldown) {
     console.log(`🔄 All providers on cooldown, checking for quota resets...`);
     
@@ -364,18 +337,6 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
         return { response, provider: "openrouter", model: `${model}-recovered` };
       } catch (error: any) {
         console.log(`❌ OpenRouter retry failed:`, error.message);
-      }
-    }
-    
-    if (shouldRetryProvider("github")) {
-      console.log(`🔄 Forcing GitHub retry - quota may have reset`);
-      try {
-        const modelConfig = getNextGitHubModel();
-        const response = await callGitHubModelsAPI(conversationHistory, modelConfig);
-        markProviderSuccess("github");
-        return { response, provider: "github", model: `${modelConfig.name}-recovered` };
-      } catch (error: any) {
-        console.log(`❌ GitHub retry failed:`, error.message);
       }
     }
   }
@@ -424,7 +385,7 @@ export async function POST(req: Request) {
     console.log(`✅ AI response saved. Total messages for ${sessionId}:`, conversations[sessionId].length);
     console.log(`🤖 AI response:`, reply.substring(0, 100) + (reply.length > 100 ? "..." : ""));
     console.log(`📊 Final conversation state:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 30)}...`));
-    console.log(`🔄 Model rotation status - OpenRouter: ${currentOpenRouterModelIndex}/${OPENROUTER_FREE_MODELS.length}, Gemini: ${currentGeminiKeyIndex}/${GEMINI_API_KEYS.length}, GitHub: ${currentGitHubModelIndex}/${GITHUB_MODELS.length}`);
+    console.log(`🔄 Model rotation status - OpenRouter: ${currentOpenRouterModelIndex}/${OPENROUTER_FREE_MODELS.length}, Gemini: ${currentGeminiKeyIndex}/${GEMINI_API_KEYS.length}`);
 
     return NextResponse.json({ output: reply });
   } catch (error: any) {

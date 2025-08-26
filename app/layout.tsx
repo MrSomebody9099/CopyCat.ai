@@ -4,8 +4,8 @@ export const metadata = { title: "CopyCat AI", description: "All-in-one AI copyw
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="bg-black">
+      <body className="bg-black text-white">{children}</body>
     </html>
   );
 }
