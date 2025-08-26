@@ -2,34 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 // Whop SDK will be initialized on the client side
 
-// Simple copy types & presets
-const COPY_TYPES = [
-  { id: "social", label: "Social Caption" },
-  { id: "ad", label: "Ad Headline" },
-  { id: "email", label: "Email Body" },
-  { id: "blog", label: "Blog Intro" },
-  { id: "hook", label: "Hook / Lead" },
-];
-
-const TONES = ["Neutral", "Casual", "Professional", "Playful", "Luxury", "Bold"] as const;
-const LENGTHS = ["Short", "Medium", "Long"] as const;
-
 export default function Page() {
   const [userName, setUserName] = useState<string>("");
-  const [brief, setBrief] = useState("");
-  const [type, setType] = useState(COPY_TYPES[0].id);
-  const [tone, setTone] = useState<(typeof TONES)[number]>("Neutral");
-  const [length, setLength] = useState<(typeof LENGTHS)[number]>("Medium");
+  const [userInput, setUserInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState("");
-  const [sessionId, setSessionId] = useState("");
-  const [conversation, setConversation] = useState<{role: string, content: string}[]>([]);
-  const disabled = useMemo(() => !brief.trim() || loading, [brief, loading]);
+  const [sessionId, setSessionId] = useState("user-123");
+  const disabled = useMemo(() => !userInput.trim() || loading, [userInput, loading]);
 
   useEffect(() => {
-    // Generate a unique session ID for this user session
-    setSessionId(`session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-    
     // Whop SDK will be available in the iframe context
     // For now, we'll handle this gracefully
     try {
@@ -47,11 +28,8 @@ export default function Page() {
     setLoading(true);
     setOutput("");
     try {
-      // Construct the user input based on the form values
-      const userInput = `Write ${length} ${type} copy with a ${tone} tone for: ${brief}`;
-      const sessionId = "user-123"; // Later: generate per user dynamically
-      
       console.log("Calling generate API with:", { userInput, sessionId });
+      console.log("Current sessionId:", sessionId);
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,6 +48,8 @@ export default function Page() {
       
       if (data.output) {
         setOutput(data.output);
+        // Clear input after successful generation
+        setUserInput("");
       } else {
         setOutput("⚠️ No content was generated. Please try again.");
       }
@@ -86,55 +66,35 @@ export default function Page() {
     navigator.clipboard.writeText(output);
   }
 
+  // Handle Enter key press
+  function handleKeyPress(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey && !disabled) {
+      e.preventDefault();
+      generate();
+    }
+  }
+
   return (
     <main className="min-h-screen p-6 sm:p-10">
       <div className="mx-auto max-w-4xl space-y-6">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">CopyCat AI 🐾</h1>
-            <p className="text-sm text-slate-600">All-in-one AI copywriter for Whop communities {userName ? `— hi ${userName}!` : ""}</p>
-          </div>
-          <button className="button" onClick={generate} disabled={disabled}>
-            {loading ? "Generating…" : "Generate"}
-          </button>
+        <header className="text-center">
+          <h1 className="text-2xl font-semibold">CopyCat AI 🐾</h1>
+          <p className="text-sm text-slate-600">AI copywriter for Whop communities {userName ? `— hi ${userName}!` : ""}</p>
         </header>
 
         <section className="card space-y-4">
-          <div>
-            <label className="label">What are we writing about? (product, offer, audience, goal)</label>
+          <div className="flex gap-2">
             <textarea
-              className="input min-h-[120px]"
-              placeholder="e.g., Fitness coaching program for busy dads, goal: book a strategy call"
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
+              className="input flex-1 min-h-[60px] resize-none"
+              placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              rows={3}
             />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="label">Copy type</label>
-              <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
-                {COPY_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Tone</label>
-              <select className="select" value={tone} onChange={(e) => setTone(e.target.value as any)}>
-                {TONES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Length</label>
-              <select className="select" value={length} onChange={(e) => setLength(e.target.value as any)}>
-                {LENGTHS.map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </div>
+            <button className="button px-8" onClick={generate} disabled={disabled}>
+              {loading ? "Generating…" : "Generate"}
+            </button>
           </div>
         </section>
 
@@ -145,8 +105,8 @@ export default function Page() {
               <button className="button" onClick={copy} disabled={!output}>Copy</button>
             </div>
           </div>
-          <div className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-            {output || "Your generated copy will appear here…"}
+          <div className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm min-h-[120px]">
+            {output || "Your conversation with CopyCat AI will appear here…"}
           </div>
         </section>
       </div>

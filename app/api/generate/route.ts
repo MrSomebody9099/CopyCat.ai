@@ -5,6 +5,139 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // -------------------
+// AI Provider Configuration
+// -------------------
+const OPENROUTER_FREE_MODELS = [
+  "mistralai/mistral-7b-instruct:free",
+  "huggingfaceh4/zephyr-7b-beta:free", 
+  "openchat/openchat-7b:free",
+  "gryphe/mythomist-7b:free",
+  "undi95/toppy-m-7b:free",
+  "openrouter/auto",
+  "nousresearch/nous-capybara-7b:free",
+  "meta-llama/codellama-34b-instruct:free",
+  "phind/phind-codellama-34b:free",
+  "microsoft/wizardlm-2-8x22b:free",
+  "deepseek/deepseek-r1-0528-qwen3-8b:free",
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "deepseek/deepseek-r1-distill-qwen-14b:free",
+  "deepseek/deepseek-r1-distill-llama-70b:free",
+  "deepseek/deepseek-r1:free"
+];
+
+const GEMINI_API_KEYS = [
+  "AIzaSyBBkLxZe1OC4M7l7lT91AQYtouq388is4A", // Current in use
+  "AIzaSyCTh6o0FOCsGVihunykAcM9Zsa1YKZMedk", // API 1
+  "AIzaSyDYBjJYb9_c63lglYOQcAKS9O14VN_o4jA"  // API 3
+];
+
+const GITHUB_MODELS = [
+  {
+    name: "DeepSeek-R1-0528", 
+    token: "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"
+  },
+  {
+    name: "gpt-4o-mini", // OpenAI GPT-5 placeholder
+    token: "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"
+  },
+  {
+    name: "grok-3", // Grok3 placeholder
+    token: "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"
+  }
+];
+
+// Provider state management
+let currentOpenRouterModelIndex = 0;
+let currentGeminiKeyIndex = 0;
+let currentGitHubModelIndex = 0;
+const providerCooldowns: Record<string, number> = {};
+const providerLastSuccess: Record<string, number> = {};
+const quotaResetTimes = {
+  gemini: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  openrouter: 24 * 60 * 60 * 1000, // 24 hours (most models)
+  github: 60 * 60 * 1000 // 1 hour (more frequent resets)
+};
+
+// Utility functions
+function getNextOpenRouterModel(): string {
+  const model = OPENROUTER_FREE_MODELS[currentOpenRouterModelIndex];
+  currentOpenRouterModelIndex = (currentOpenRouterModelIndex + 1) % OPENROUTER_FREE_MODELS.length;
+  return model;
+}
+
+function getNextGeminiKey(): string {
+  const key = GEMINI_API_KEYS[currentGeminiKeyIndex];
+  currentGeminiKeyIndex = (currentGeminiKeyIndex + 1) % GEMINI_API_KEYS.length;
+  return key;
+}
+
+function getNextGitHubModel(): { name: string; token: string } {
+  const model = GITHUB_MODELS[currentGitHubModelIndex];
+  currentGitHubModelIndex = (currentGitHubModelIndex + 1) % GITHUB_MODELS.length;
+  return model;
+}
+
+function isProviderOnCooldown(provider: string): boolean {
+  const cooldownUntil = providerCooldowns[provider];
+  const now = Date.now();
+  
+  // Check if cooldown has expired
+  if (!cooldownUntil || now >= cooldownUntil) {
+    // Remove expired cooldown
+    if (providerCooldowns[provider]) {
+      delete providerCooldowns[provider];
+      console.log(`🔄 ${provider} cooldown expired, provider available again`);
+    }
+    return false;
+  }
+  
+  return true;
+}
+
+function setCooldown(provider: string, minutes: number = 5): void {
+  const now = Date.now();
+  const cooldownTime = minutes * 60 * 1000;
+  providerCooldowns[provider] = now + cooldownTime;
+  
+  // Calculate when quota likely resets
+  const quotaResetTime = quotaResetTimes[provider] || (24 * 60 * 60 * 1000);
+  const lastSuccess = providerLastSuccess[provider] || (now - quotaResetTime);
+  const timeSinceLastSuccess = now - lastSuccess;
+  
+  // If it's been close to a full quota period, set shorter cooldown
+  if (timeSinceLastSuccess >= quotaResetTime * 0.8) {
+    const shortCooldown = Math.min(cooldownTime, quotaResetTime - timeSinceLastSuccess + (10 * 60 * 1000)); // Add 10 min buffer
+    providerCooldowns[provider] = now + shortCooldown;
+    console.log(`⏰ ${provider} quota likely resetting soon, shorter cooldown: ${Math.round(shortCooldown / 60000)} minutes`);
+  } else {
+    console.log(`🚫 ${provider} on cooldown for ${minutes} minutes`);
+  }
+}
+
+function markProviderSuccess(provider: string): void {
+  providerLastSuccess[provider] = Date.now();
+  // Clear any existing cooldown on success
+  if (providerCooldowns[provider]) {
+    delete providerCooldowns[provider];
+    console.log(`✅ ${provider} working again, cooldown cleared`);
+  }
+}
+
+function shouldRetryProvider(provider: string): boolean {
+  const now = Date.now();
+  const lastSuccess = providerLastSuccess[provider];
+  
+  if (!lastSuccess) return true;
+  
+  const quotaResetTime = quotaResetTimes[provider] || (24 * 60 * 60 * 1000);
+  const timeSinceLastSuccess = now - lastSuccess;
+  
+  // If it's been long enough for quota to reset, try the provider again
+  return timeSinceLastSuccess >= quotaResetTime;
+}
+
+// -------------------
 // System Prompt
 // -------------------
 const system = `
@@ -32,9 +165,223 @@ CopyCat.ai # Full System Prompt Text for CopyCat.ai # You Are CopyCat.ai Made an
 `;
 
 // -------------------
-// Conversation Memory
+// Conversation Memory (In-Memory Only)
 // -------------------
 const conversations: Record<string, { role: "user" | "assistant"; content: string }[]> = {};
+console.log('💭 Conversation memory initialized (in-memory only, resets on server restart)');
+
+// -------------------
+// AI Provider Functions
+// -------------------
+async function callGeminiAPI(conversationHistory: { role: "user" | "assistant"; content: string }[]): Promise<string> {
+  const apiKey = getNextGeminiKey();
+  const geminiAI = new GoogleGenerativeAI(apiKey);
+  
+  const model = geminiAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    systemInstruction: system
+  });
+
+  const result = await model.generateContent({
+    contents: conversationHistory.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+  });
+
+  return result.response.text();
+}
+
+async function callOpenRouterAPI(conversationHistory: { role: "user" | "assistant"; content: string }[], model?: string): Promise<string> {
+  const selectedModel = model || getNextOpenRouterModel();
+  
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "X-Title": "CopyCat.ai"
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: [
+        { role: "system", content: system },
+        ...conversationHistory.map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API error: ${response.status} - ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || "No response generated";
+}
+
+async function callGitHubModelsAPI(conversationHistory: { role: "user" | "assistant"; content: string }[], modelConfig?: { name: string; token: string }): Promise<string> {
+  const selectedModel = modelConfig || getNextGitHubModel();
+  
+  const response = await fetch(`https://models.inference.ai.azure.com/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${selectedModel.token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: selectedModel.name,
+      messages: [
+        { role: "system", content: system },
+        ...conversationHistory.map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub Models API error: ${response.status} - ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || "No response generated";
+}
+
+async function generateWithFailover(conversationHistory: { role: "user" | "assistant"; content: string }[]): Promise<{ response: string; provider: string; model?: string }> {
+  const now = Date.now();
+  
+  // Always try Gemini first if available or quota should have reset
+  if (!isProviderOnCooldown("gemini") || shouldRetryProvider("gemini")) {
+    const maxGeminiAttempts = Math.min(2, GEMINI_API_KEYS.length);
+    for (let i = 0; i < maxGeminiAttempts; i++) {
+      try {
+        const currentKey = GEMINI_API_KEYS[currentGeminiKeyIndex];
+        console.log(`🔷 Trying Gemini API with key ${currentGeminiKeyIndex + 1}/${GEMINI_API_KEYS.length}...`);
+        const response = await callGeminiAPI(conversationHistory);
+        console.log(`✅ Gemini API successful with key ${currentGeminiKeyIndex + 1}`);
+        markProviderSuccess("gemini");
+        return { response, provider: "gemini", model: `gemini-1.5-flash-key${currentGeminiKeyIndex + 1}` };
+      } catch (error: any) {
+        console.log(`❌ Gemini key ${currentGeminiKeyIndex + 1} failed:`, error.message);
+        if (error.message.includes("429") || error.message.includes("quota") || error.message.includes("RESOURCE_EXHAUSTED")) {
+          // Try next key
+          getNextGeminiKey();
+          if (i === maxGeminiAttempts - 1) {
+            setCooldown("gemini", 15); // Longer cooldown for quota issues
+          }
+          continue;
+        }
+        // For other errors, don't continue trying
+        setCooldown("gemini", 5);
+        break;
+      }
+    }
+  }
+
+  // Try OpenRouter models (secondary) - check if available or should retry
+  if (!isProviderOnCooldown("openrouter") || shouldRetryProvider("openrouter")) {
+    const maxOpenRouterAttempts = Math.min(4, OPENROUTER_FREE_MODELS.length);
+    for (let i = 0; i < maxOpenRouterAttempts; i++) {
+      try {
+        const model = getNextOpenRouterModel();
+        console.log(`🟠 Trying OpenRouter with model: ${model}`);
+        const response = await callOpenRouterAPI(conversationHistory, model);
+        console.log(`✅ OpenRouter successful with ${model}`);
+        markProviderSuccess("openrouter");
+        return { response, provider: "openrouter", model };
+      } catch (error: any) {
+        console.log(`❌ OpenRouter model failed:`, error.message);
+        if (error.message.includes("429") || error.message.includes("403") || error.message.includes("quota")) {
+          if (i === maxOpenRouterAttempts - 1) {
+            setCooldown("openrouter", 10);
+          }
+          continue;
+        }
+        // For other errors, don't continue trying
+        setCooldown("openrouter", 3);
+        break;
+      }
+    }
+  }
+
+  // Try GitHub Models (tertiary) - check if available or should retry
+  if (!isProviderOnCooldown("github") || shouldRetryProvider("github")) {
+    const maxGitHubAttempts = Math.min(2, GITHUB_MODELS.length);
+    for (let i = 0; i < maxGitHubAttempts; i++) {
+      try {
+        const modelConfig = getNextGitHubModel();
+        console.log(`🟣 Trying GitHub Models with: ${modelConfig.name}`);
+        const response = await callGitHubModelsAPI(conversationHistory, modelConfig);
+        console.log(`✅ GitHub Models successful with ${modelConfig.name}`);
+        markProviderSuccess("github");
+        return { response, provider: "github", model: modelConfig.name };
+      } catch (error: any) {
+        console.log(`❌ GitHub Models failed:`, error.message);
+        if (error.message.includes("429") || error.message.includes("403") || error.message.includes("quota")) {
+          if (i === maxGitHubAttempts - 1) {
+            setCooldown("github", 5);
+          }
+          continue;
+        }
+        // For other errors, don't continue trying
+        setCooldown("github", 2);
+        break;
+      }
+    }
+  }
+
+  // If all providers are on cooldown but quotas might have reset, give it one more try
+  const allOnCooldown = isProviderOnCooldown("gemini") && isProviderOnCooldown("openrouter") && isProviderOnCooldown("github");
+  if (allOnCooldown) {
+    console.log(`🔄 All providers on cooldown, checking for quota resets...`);
+    
+    // Try providers that might have quota reset
+    if (shouldRetryProvider("gemini")) {
+      console.log(`🔄 Forcing Gemini retry - quota may have reset`);
+      try {
+        const response = await callGeminiAPI(conversationHistory);
+        markProviderSuccess("gemini");
+        return { response, provider: "gemini", model: "gemini-1.5-flash-recovered" };
+      } catch (error: any) {
+        console.log(`❌ Gemini retry failed:`, error.message);
+      }
+    }
+    
+    if (shouldRetryProvider("openrouter")) {
+      console.log(`🔄 Forcing OpenRouter retry - quota may have reset`);
+      try {
+        const model = getNextOpenRouterModel();
+        const response = await callOpenRouterAPI(conversationHistory, model);
+        markProviderSuccess("openrouter");
+        return { response, provider: "openrouter", model: `${model}-recovered` };
+      } catch (error: any) {
+        console.log(`❌ OpenRouter retry failed:`, error.message);
+      }
+    }
+    
+    if (shouldRetryProvider("github")) {
+      console.log(`🔄 Forcing GitHub retry - quota may have reset`);
+      try {
+        const modelConfig = getNextGitHubModel();
+        const response = await callGitHubModelsAPI(conversationHistory, modelConfig);
+        markProviderSuccess("github");
+        return { response, provider: "github", model: `${modelConfig.name}-recovered` };
+      } catch (error: any) {
+        console.log(`❌ GitHub retry failed:`, error.message);
+      }
+    }
+  }
+
+  throw new Error("All AI providers are currently unavailable. Quotas may be exhausted - try again in a few minutes.");
+}
 
 // -------------------
 // POST Route
@@ -54,33 +401,45 @@ export async function POST(req: Request) {
     // Initialize conversation memory for this session
     if (!conversations[sessionId]) {
       conversations[sessionId] = [];
+      console.log(`🆕 New conversation started for session: ${sessionId}`);
+    } else {
+      console.log(`🔄 Continuing conversation for session: ${sessionId} with ${conversations[sessionId].length} existing messages`);
     }
 
     // Push user message
     conversations[sessionId].push({ role: "user", content: userInput });
+    
+    console.log(`📝 User message added. Total messages for ${sessionId}:`, conversations[sessionId].length);
+    console.log(`📄 Latest user message:`, userInput.substring(0, 100) + (userInput.length > 100 ? "..." : ""));
+    console.log(`💭 Full conversation history:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 50)}...`));
 
-    // Get model with system instruction
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      systemInstruction: system
-    });
-
-    // Generate content with proper Gemini format
-    const result = await model.generateContent({
-      contents: conversations[sessionId].map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
-    });
-
-    const reply = result.response.text();
+    // Generate AI response with failover
+    const { response: reply, provider, model } = await generateWithFailover(conversations[sessionId]);
+    
+    console.log(`🎯 Response generated by: ${provider}${model ? ` (${model})` : ""}`);
 
     // Save assistant reply to memory
     conversations[sessionId].push({ role: "assistant", content: reply });
+    
+    console.log(`✅ AI response saved. Total messages for ${sessionId}:`, conversations[sessionId].length);
+    console.log(`🤖 AI response:`, reply.substring(0, 100) + (reply.length > 100 ? "..." : ""));
+    console.log(`📊 Final conversation state:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 30)}...`));
+    console.log(`🔄 Model rotation status - OpenRouter: ${currentOpenRouterModelIndex}/${OPENROUTER_FREE_MODELS.length}, Gemini: ${currentGeminiKeyIndex}/${GEMINI_API_KEYS.length}, GitHub: ${currentGitHubModelIndex}/${GITHUB_MODELS.length}`);
 
     return NextResponse.json({ output: reply });
   } catch (error: any) {
-    console.error("Error in /api/generate:", error);
-    return NextResponse.json({ error: error.message || "Something went wrong" }, { status: 500 });
+    console.error("❌ Error in /api/generate:", error);
+    
+    // Provide more helpful error messages
+    let errorMessage = "Something went wrong";
+    if (error.message.includes("All AI providers are currently unavailable")) {
+      errorMessage = "All AI services are temporarily busy. Please try again in a few minutes.";
+    } else if (error.message.includes("quota") || error.message.includes("429")) {
+      errorMessage = "API quota exceeded. Trying alternative providers...";
+    } else {
+      errorMessage = error.message || "Something went wrong";
+    }
+    
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

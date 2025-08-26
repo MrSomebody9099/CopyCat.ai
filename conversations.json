@@ -1,0 +1,44 @@
+{
+  "user-123": [
+    {
+      "role": "user",
+      "content": "Write Medium social copy with a Neutral tone for: hi iam xyz"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey there!  How's your day treating you?  Ready to craft some killer copy, or just looking for a casual chat?  Let's brainstorm some ideas for that Medium post.  What's the vibe you're going for?\n"
+    },
+    {
+      "role": "user",
+      "content": "Write Medium social copy with a Neutral tone for: what is my name"
+    },
+    {
+      "role": "assistant",
+      "content": "Oh, that's a fun one!  Having a bit of a philosophical moment, are we?  I'm good, thanks for asking.  So, about that Medium post...  what kind of content are you hoping to create?  Perhaps we could start with a catchy title?\n"
+    },
+    {
+      "role": "user",
+      "content": "Write Medium social copy with a Neutral tone for: what is my name"
+    },
+    {
+      "role": "assistant",
+      "content": "That's a question best answered by you!  But if you're looking for ideas for a Medium post about identity, I'm game.  Perhaps something on the meaning of names, or maybe exploring the concept of self?  What are your thoughts?\n"
+    },
+    {
+      "role": "user",
+      "content": "Write Medium social copy with a Neutral tone for: hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey there!  How's it going?  Just checking in – what's on your mind today?  Anything interesting you'd like to write about for Medium?\n"
+    },
+    {
+      "role": "user",
+      "content": "Write Medium social copy with a Neutral tone for: hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello!  What are you working on today?  Need some help brainstorming a Medium post, or just looking for a chat?\n"
+    }
+  ]
+}
