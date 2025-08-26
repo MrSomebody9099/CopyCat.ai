@@ -165,34 +165,56 @@ export default function Page() {
     <div 
       className="min-h-screen w-full bg-gray-900 text-white flex flex-col"
       style={{
-        backgroundColor: '#1f2937',
+        backgroundColor: '#1a1a1a',
         color: '#ffffff',
         minHeight: '100vh',
-        width: '100vw',
+        width: '100%',
+        maxWidth: '100%',
         margin: 0,
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden'
+        overflowX: 'hidden',
+        boxSizing: 'border-box'
       }}
     >
       {/* Header */}
-      <header className="text-center py-8 border-b border-gray-700">
-        <h1 
-          className="text-4xl font-bold mb-2"
+      <header className="py-4">
+        <div 
+          className="flex items-center justify-center w-full"
           style={{
-            color: '#ffffff',
-            fontSize: '2.25rem',
-            fontWeight: 'bold',
-            marginBottom: '0.5rem'
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
           }}
         >
-          CopyCat AI 🐾
-        </h1>
-        <p className="opacity-80">
-          AI copywriter with personality — let’s chat!
-        </p>
+          <h1 
+            className="text-3xl font-semibold tracking-wide"
+            style={{
+              color: '#ffffff',
+              fontSize: '1.875rem',
+              fontWeight: '600',
+              letterSpacing: '0.025em',
+              fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+              textAlign: 'center'
+            }}
+          >
+            CopyCat
+          </h1>
+        </div>
+        <div 
+          className="mt-2"
+          style={{
+            height: '1px',
+            width: '100vw',
+            backgroundColor: '#6b7280',
+            marginTop: '0.5rem',
+            marginLeft: '-0rem',
+            position: 'relative'
+          }}
+        ></div>
       </header>
 
       {/* Messages */}
@@ -201,28 +223,36 @@ export default function Page() {
         style={{
           flex: 1,
           overflowY: 'auto',
-          backgroundColor: '#1f2937',
+          backgroundColor: '#1a1a1a',
           padding: '1.5rem 1rem'
         }}
       >
-        <div className="max-w-3xl mx-auto space-y-6 pb-32">
+        <div className="w-full space-y-6 pb-32 px-4">
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${
-                message.type === "user" ? "justify-end" : "justify-start"
-              }`}
+              className="flex justify-end"
             >
               <div
-                className={`rounded-2xl px-5 py-3 shadow-md max-w-[70%] ${
-                  message.type === "user"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-white border border-gray-600"
-                }`}
+                className="px-4 py-3 shadow-md text-white border ml-auto"
+                style={{
+                  borderRadius: '12px',
+                  backgroundColor: message.type === "user" 
+                    ? '#2a2a2a' 
+                    : '#333333',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  maxWidth: message.type === "user" 
+                    ? '80%'
+                    : '70%',
+                  minWidth: message.type === "user" 
+                    ? '200px'
+                    : 'auto',
+                  width: 'auto',
+                  marginLeft: 'auto'
+                }}
               >
                 {message.type === "assistant" && (
                   <div className="flex items-center gap-2 mb-2">
-                    <span>🐾</span>
                     <span className="text-sm opacity-80">CopyCat</span>
                   </div>
                 )}
@@ -232,10 +262,17 @@ export default function Page() {
           ))}
 
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-800 border border-gray-600 rounded-2xl px-5 py-3">
+            <div className="flex justify-end">
+              <div 
+                className="border px-5 py-3 ml-auto"
+                style={{
+                  borderRadius: '12px',
+                  backgroundColor: '#333333',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  marginLeft: 'auto'
+                }}
+              >
                 <div className="flex items-center gap-2">
-                  <span>🐾</span>
                   <span className="text-sm opacity-80">CopyCat</span>
                 </div>
                 <p className="text-gray-300">Typing...</p>
@@ -268,7 +305,7 @@ export default function Page() {
             display: 'flex',
             alignItems: 'center',
             backgroundColor: '#1a1a1a',
-            border: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
             borderRadius: '9999px',
             padding: '1rem 1.5rem',
             boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2)'
