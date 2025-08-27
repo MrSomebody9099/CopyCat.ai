@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Sidebar CSS Variables inspired by shadcn */
+@layer base {
+  :root {
+    --sidebar: #0a0a0a;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #18181b;
+    --sidebar-primary-foreground: #fafafa;
+    --sidebar-accent: #27272a;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #27272a;
+    --sidebar-ring: #71717a;
+    --muted-foreground: #71717a;
+  }
+
+  .dark {
+    --sidebar: #0a0a0a;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #3b82f6;
+    --sidebar-primary-foreground: #fafafa;
+    --sidebar-accent: #27272a;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-ring: #3f3f46;
+    --muted-foreground: #a1a1aa;
+  }
+}
+
 /* Force dark grey background everywhere and eliminate all borders */
 * {
   margin: 0 !important;

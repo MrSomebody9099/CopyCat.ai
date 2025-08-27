@@ -1,11 +1,19 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
-
-interface Message {
-  type: "user" | "assistant";
-  content: string;
-  id: string;
-}
+import ClientOnlyInput from "../../components/ClientOnlyInput";
+import ChatInputSection from "../../components/ChatInputSection";
+import HistoryButton from "../../components/HistoryButton";
+import Sidebar from "../../components/Sidebar";
+import { useSessionManager, Message } from "../../hooks/useSessionManager";
+import { 
+  handleApiError, 
+  retryOperation, 
+  validateInput, 
+  getErrorMessage, 
+  isRecoverableError,
+  checkMemoryUsage,
+  ErrorCode 
+} from "../../utils/errorHandler";
 
 const placeholderTexts = [
   "What killer copy are we cooking today?",
@@ -19,11 +27,35 @@ const placeholderTexts = [
 export default function Page() {
   const [userInput, setUserInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId, setSessionId] = useState("user-123");
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
   const [displayedPlaceholder, setDisplayedPlaceholder] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isClient, setIsClient] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Prevent hydration mismatch by ensuring client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+    // Initialize placeholder on client side
+    setDisplayedPlaceholder(placeholderTexts[0]);
+  }, []);
+  
+  // Session management
+  const {
+    currentSessionId,
+    createNewSession,
+    addMessage,
+    updateMessage,
+    getCurrentSession,
+    setCurrentSessionId
+  } = useSessionManager();
+  
+  // Get current session messages
+  const currentSession = getCurrentSession();
+  const messages = currentSession?.messages || [];
+  
   const disabled = useMemo(
     () => !userInput.trim() || loading,
     [userInput, loading]
@@ -31,7 +63,7 @@ export default function Page() {
 
   // Typewriter effect for rotating placeholders
   useEffect(() => {
-    if (userInput) return;
+    if (!isClient || userInput) return;
 
     const typeWriterEffect = () => {
       const currentText = placeholderTexts[currentPlaceholder];
@@ -60,95 +92,117 @@ export default function Page() {
 
     const cleanup = typeWriterEffect();
     return cleanup;
-  }, [currentPlaceholder, userInput]);
+  }, [currentPlaceholder, userInput, isClient]);
 
   // Typewriter effect for CopyCat responses
-  const typeWriterResponse = useCallback((text: string, messageId: string) => {
+  const typeWriterResponse = useCallback((text: string, messageId: string, sessionId: string) => {
     let i = 0;
     const typeInterval = setInterval(() => {
       if (i < text.length) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? { ...msg, content: text.slice(0, i + 1) }
-              : msg
-          )
-        );
+        // Update the existing message content
+        updateMessage(sessionId, messageId, text.slice(0, i + 1));
         i++;
       } else {
         clearInterval(typeInterval);
       }
     }, 30);
-  }, []);
+    
+    // Return cleanup function
+    return () => clearInterval(typeInterval);
+  }, [updateMessage]);
 
   async function generate() {
     if (disabled) return;
 
-    setLoading(true);
-    const messageId = Date.now().toString();
-    const userMessage: Message = {
-      type: "user",
-      content: userInput,
-      id: `user-${messageId}`,
-    };
-
-    const assistantMessage: Message = {
-      type: "assistant",
-      content: "",
-      id: `assistant-${messageId}`,
-    };
-
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    const inputText = userInput;
-    setUserInput("");
-
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userInput: inputText, sessionId }),
-      });
+      // Clear any previous errors
+      setError(null);
+      
+      // Validate input
+      validateInput(userInput);
+      
+      // Check memory usage
+      checkMemoryUsage();
+      
+      setLoading(true);
+      const messageId = Date.now().toString();
+      const userMessage: Message = {
+        type: "user",
+        content: userInput,
+        id: `user-${messageId}`,
+      };
 
-      const data = await res.json();
+      const assistantMessage: Message = {
+        type: "assistant",
+        content: "",
+        id: `assistant-${messageId}`,
+      };
 
-      if (!res.ok) {
-        const errorText = `⚠️ ${data.error || "Generation failed"}`;
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessage.id
-              ? { ...msg, content: errorText }
-              : msg
-          )
-        );
-        return;
-      }
+      // Add messages to current session
+      addMessage(currentSessionId, userMessage);
+      addMessage(currentSessionId, assistantMessage);
+      
+      const inputText = userInput;
+      setUserInput("");
+
+      // Use retry logic for API call
+      const data = await retryOperation(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        
+        try {
+          const res = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userInput: inputText, sessionId: currentSessionId }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+            throw { status: res.status, message: errorData.error || 'Request failed' };
+          }
+          
+          return await res.json();
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      }, 3, 1000);
 
       if (data.output) {
-        typeWriterResponse(data.output, assistantMessage.id);
+        typeWriterResponse(data.output, assistantMessage.id, currentSessionId);
+        setRetryCount(0); // Reset retry count on success
       } else {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessage.id
-              ? {
-                  ...msg,
-                  content:
-                    "⚠️ No content was generated. Please try again.",
-                }
-              : msg
-          )
-        );
+        const noContentMessage: Message = {
+          type: "assistant",
+          content: "⚠️ No content was generated. Please try again.",
+          id: assistantMessage.id
+        };
+        addMessage(currentSessionId, noContentMessage);
       }
-    } catch (e: any) {
-      const errorText = `⚠️ Network error: ${
-        e.message || "Please check your connection."
-      }`;
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessage.id
-            ? { ...msg, content: errorText }
-            : msg
-        )
-      );
+    } catch (error: any) {
+      console.error('Generate error:', error);
+      
+      const chatError = handleApiError(error);
+      const errorText = `⚠️ ${getErrorMessage(chatError)}`;
+      
+      const errorMessage: Message = {
+        type: "assistant",
+        content: errorText,
+        id: `assistant-${Date.now()}`
+      };
+      
+      addMessage(currentSessionId, errorMessage);
+      
+      // Set error state for UI feedback
+      if (!isRecoverableError(chatError)) {
+        setError(chatError.message);
+      }
+      
+      setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -162,23 +216,52 @@ export default function Page() {
   }
 
   return (
-    <div 
-      className="min-h-screen w-full bg-gray-900 text-white flex flex-col"
-      style={{
-        backgroundColor: '#1a1a1a',
-        color: '#ffffff',
-        minHeight: '100vh',
-        width: '100%',
-        maxWidth: '100%',
-        margin: 0,
-        padding: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        overflowX: 'hidden',
-        boxSizing: 'border-box'
-      }}
-    >
+    <div className="min-h-screen w-full bg-gray-900 text-white flex flex-col">
+      {/* Sidebar */}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      
+      {/* History Button - Top Left - Hidden when sidebar is open */}
+      {!isSidebarOpen && (
+        <HistoryButton onClick={() => setIsSidebarOpen(true)} />
+      )}
+      
+      {/* Main Chat Area */}
+      <div 
+        className="flex-1 flex flex-col"
+        style={{
+          backgroundColor: '#1a1a1a',
+          color: '#ffffff',
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          overflowX: 'hidden',
+          boxSizing: 'border-box'
+        }}
+      >
+      {/* Error Display */}
+      {error && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-900 border border-red-700 rounded-lg p-4 max-w-md">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-red-200 text-sm">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-400 hover:text-red-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {retryCount > 0 && (
+            <p className="text-red-300 text-xs mt-1">Retry attempts: {retryCount}</p>
+          )}
+        </div>
+      )}
+              
       {/* Header */}
       <header className="py-4">
         <div 
@@ -331,93 +414,17 @@ export default function Page() {
       </div>
 
       {/* Fixed Input Bar at Bottom */}
-      <div 
-        className="fixed bottom-6 left-0 right-0 flex justify-center px-4"
-        style={{
-          position: 'fixed',
-          bottom: '1.5rem',
-          left: 0,
-          right: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '0 1rem',
-          zIndex: 50
-        }}
-      >
-        <div 
-          className="w-full max-w-3xl flex items-center bg-[#1a1a1a] rounded-full px-6 py-4 shadow-lg"
-          style={{
-            width: '100%',
-            maxWidth: '48rem',
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: '#1a1a1a',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '9999px',
-            padding: '1rem 1.5rem',
-            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2)'
-          }}
-        >
-          <input
-            type="text"
-            className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-lg border-none"
-            style={{
-              flex: 1,
-              backgroundColor: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: '#ffffff',
-              fontSize: '1.125rem',
-              padding: 0,
-              margin: 0,
-              boxShadow: 'none'
-            }}
-            placeholder={displayedPlaceholder + (isTyping ? '|' : '')}
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-          />
-          <button
-            onClick={generate}
-            disabled={disabled}
-            className={`w-12 h-12 ml-3 rounded-full flex items-center justify-center transition-all duration-200 shadow-md ${
-              disabled 
-                ? 'bg-gray-600 cursor-not-allowed opacity-50' 
-                : 'bg-white hover:bg-gray-100 hover:scale-105 active:scale-95'
-            }`}
-            style={{
-              width: '3rem',
-              height: '3rem',
-              marginLeft: '0.75rem',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              cursor: disabled ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <svg 
-              className={`w-6 h-6 ${disabled ? 'text-gray-400' : 'text-black'}`}
-              style={{
-                width: '1.5rem',
-                height: '1.5rem'
-              }}
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2.5} 
-                d="M12 19V5m0 0l-7 7m7-7l7 7" 
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <ChatInputSection
+        userInput={userInput}
+        setUserInput={setUserInput}
+        handleKeyPress={handleKeyPress}
+        generate={generate}
+        disabled={disabled}
+        placeholder={isClient ? (displayedPlaceholder + (isTyping ? '|' : '')) : placeholderTexts[0]}
+        isClient={isClient}
+      />
+      
+      </div> {/* End Main Chat Area */}
     </div>
   );
 }
