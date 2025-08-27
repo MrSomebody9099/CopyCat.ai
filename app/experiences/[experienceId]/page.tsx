@@ -46,12 +46,12 @@ export default function Page() {
         } else {
           clearInterval(typeInterval);
           setIsTyping(false);
-          // Wait 30 seconds before switching
+          // Wait 10 seconds before switching
           setTimeout(() => {
             setCurrentPlaceholder(
               (prev) => (prev + 1) % placeholderTexts.length
             );
-          }, 30000);
+          }, 10000);
         }
       }, 70);
 
@@ -227,55 +227,103 @@ export default function Page() {
           padding: '1.5rem 1rem'
         }}
       >
-        <div className="w-full space-y-6 pb-32 px-4">
+        <div className="w-full space-y-2 pb-32 px-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <div
               key={message.id}
-              className="flex justify-end"
+              className="flex"
+              style={{
+                display: 'flex',
+                margin: '8px 0',
+                justifyContent: message.type === "user" 
+                  ? 'flex-end'   // User: pushes bubble to right
+                  : 'flex-start' // Assistant: full width block
+              }}
             >
-              <div
-                className="px-4 py-3 shadow-md text-white border ml-auto"
-                style={{
-                  borderRadius: '12px',
-                  backgroundColor: message.type === "user" 
-                    ? '#2a2a2a' 
-                    : '#333333',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  maxWidth: message.type === "user" 
-                    ? '80%'
-                    : '70%',
-                  minWidth: message.type === "user" 
-                    ? '200px'
-                    : 'auto',
-                  width: 'auto',
-                  marginLeft: 'auto'
-                }}
-              >
-                {message.type === "assistant" && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm opacity-80">CopyCat</span>
+              {message.type === "user" ? (
+                // User message: bubble style
+                <div
+                  className="shadow-md text-white border"
+                  style={{
+                    display: 'inline-block',
+                    maxWidth: '70%',
+                    padding: '12px 16px',
+                    borderRadius: '20px',
+                    lineHeight: '1.5',
+                    backgroundColor: '#2a2a2a',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
+                    fontSize: '1rem',
+                    color: 'white',
+                    marginRight: '32px'
+                  }}
+                >
+                  <p 
+                    className="whitespace-pre-wrap"
+                    style={{
+                      fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
+                      lineHeight: '1.5',
+                      fontSize: '1rem',
+                      margin: 0,
+                      padding: 0
+                    }}
+                  >
+                    {message.content}
+                  </p>
+                </div>
+              ) : (
+                // Assistant message: full-width document block
+                <div
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    padding: '8px 32px',
+                    fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
+                    fontSize: '1rem',
+                    color: '#ececec',
+                    margin: '0 auto',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div 
+                    className="whitespace-pre-wrap"
+                    style={{
+                      fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
+                      lineHeight: '1.6',
+                      fontSize: '1rem',
+                      margin: 0,
+                      color: '#ececec'
+                    }}
+                  >
+                    {message.content}
                   </div>
-                )}
-                <p className="whitespace-pre-wrap">{message.content}</p>
-              </div>
+                </div>
+              )}
             </div>
           ))}
 
           {loading && (
-            <div className="flex justify-end">
-              <div 
-                className="border px-5 py-3 ml-auto"
+            <div 
+              className="flex"
+              style={{
+                display: 'flex',
+                margin: '8px 0',
+                justifyContent: 'flex-start' // Assistant style: full width
+              }}
+            >
+              <div
                 style={{
-                  borderRadius: '12px',
-                  backgroundColor: '#333333',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  marginLeft: 'auto'
+                  width: '100%',
+                  background: 'transparent',
+                  padding: '8px 32px',
+                  fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
+                  fontSize: '1rem',
+                  color: '#ececec',
+                  margin: '0 auto',
+                  textAlign: 'left'
                 }}
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm opacity-80">CopyCat</span>
-                </div>
-                <p className="text-gray-300">Typing...</p>
+                <p className="text-gray-300">CopyCat is typing...</p>
               </div>
             </div>
           )}
