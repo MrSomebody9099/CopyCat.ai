@@ -121,3 +121,36 @@ main, div, section {
 .bg-black {
   background-color: #1f2937 !important;
 }
+
+/* Markdown styling for assistant messages */
+.markdown-content {
+  font-family: "ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
+  color: #ececec;
+  line-height: 1.6;
+}
+
+.markdown-content strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.markdown-content em {
+  font-style: italic;
+  color: #e5e7eb;
+}
+
+.markdown-content code {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #f3f4f6;
+}
+
+.markdown-content p {
+  margin: 0 0 1rem 0;
+  line-height: 1.6;
+}

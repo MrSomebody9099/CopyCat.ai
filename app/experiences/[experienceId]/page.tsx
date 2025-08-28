@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import ClientOnlyInput from "../../components/ClientOnlyInput";
 import ChatInputSection from "../../components/ChatInputSection";
 import HistoryButton from "../../components/HistoryButton";
-import Sidebar from "../../components/Sidebar";
+import ChatSidebar from "../../components/ChatSidebar";
+import SettingsModal from "../../components/SettingsModal";
+import MarkdownRenderer from "../../components/MarkdownRenderer";
 import { useSessionManager, Message } from "../../hooks/useSessionManager";
 import { 
   handleApiError, 
@@ -34,27 +36,152 @@ export default function Page() {
   const [retryCount, setRetryCount] = useState(0);
   const [isClient, setIsClient] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState<{
+    id: string;
+    username: string;
+    displayName: string;
+    email?: string;
+  } | null>(null);
 
   // Prevent hydration mismatch by ensuring client-side rendering
   useEffect(() => {
     setIsClient(true);
     // Initialize placeholder on client side
     setDisplayedPlaceholder(placeholderTexts[0]);
+    // Fetch user info
+    fetchUserInfo();
   }, []);
   
+  // Fetch user info from API
+  const fetchUserInfo = async () => {
+    try {
+      const response = await fetch('/api/user/profile');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.profile) {
+          setUserInfo({
+            id: data.profile.id,
+            username: data.profile.username,
+            displayName: data.profile.displayName,
+            email: data.profile.email || ''
+          });
+          console.log('📄 User profile loaded:', {
+            displayName: data.profile.displayName,
+            email: data.profile.email ? '[SET]' : '[EMPTY]',
+            isLocalhost: data.profile.isLocalhost || false
+          });
+        }
+      } else if (response.status === 401) {
+        console.log('ℹ️ No authentication available (normal on localhost)');
+        // Set a default user for localhost development
+        setUserInfo({
+          id: 'localhost-dev-user',
+          username: 'dev-user', 
+          displayName: '',
+          email: ''
+        });
+      } else {
+        console.error('Failed to fetch user profile:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user info:', error);
+      // Fallback for localhost
+      setUserInfo({
+        id: 'localhost-dev-user',
+        username: 'dev-user',
+        displayName: '',
+        email: ''
+      });
+    }
+  };
+
+  // Handler for saving settings
+  const handleSettingsSave = async (updatedInfo: { displayName: string; email: string }) => {
+    console.log('💾 Saving settings:', updatedInfo);
+    
+    // Check if running in localhost
+    const isLocalhost = typeof window !== 'undefined' && 
+                       (window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1');
+    
+    if (isLocalhost) {
+      console.log('🔧 Running in localhost mode');
+    }
+    
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          displayName: updatedInfo.displayName,
+          email: updatedInfo.email
+          // Note: username is read-only from Whop, so we don't send it
+        })
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📝 Response data:', data);
+        
+        if (data.success) {
+          // Update local state with saved data
+          setUserInfo(prev => prev ? {
+            ...prev,
+            displayName: updatedInfo.displayName,
+            email: updatedInfo.email
+          } : null);
+          
+          console.log('✅ Settings saved successfully');
+        } else {
+          console.error('Failed to save settings:', data.error);
+          throw new Error(data.error || 'Failed to save settings');
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('API error:', response.status, errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      // Re-throw so the SettingsModal can show the error
+      throw error;
+    }
+  };
+
   // Session management
   const {
     currentSessionId,
+    currentUserId,
     createNewSession,
     addMessage,
     updateMessage,
     getCurrentSession,
-    setCurrentSessionId
+    setCurrentSessionId,
+    setUserId,
+    enableWhopIntegration,
+    syncSessionWithWhop,
+    isWhopIntegrationAvailable,
+    switchToSession,
+    getSimpleSessions,
+    deleteSession,
+    updateSessionTitle
   } = useSessionManager();
   
   // Get current session messages
   const currentSession = getCurrentSession();
   const messages = currentSession?.messages || [];
+  
+  // Set user ID when userInfo is loaded
+  useEffect(() => {
+    if (userInfo?.id) {
+      setUserId(userInfo.id);
+    }
+  }, [userInfo, setUserId]);
   
   const disabled = useMemo(
     () => !userInput.trim() || loading,
@@ -151,9 +278,25 @@ export default function Page() {
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
         
         try {
+          // Prepare headers with user info for personalization
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json"
+          };
+          
+          // Add user ID for personalization if available
+          if (userInfo?.id) {
+            headers["x-whop-user-id"] = userInfo.id;
+            console.log('🔗 Sending user info for personalization:', {
+              id: userInfo.id,
+              displayName: userInfo.displayName || '[EMPTY]'
+            });
+          } else {
+            console.log('⚠️ No user info available for personalization');
+          }
+          
           const res = await fetch("/api/generate", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({ userInput: inputText, sessionId: currentSessionId }),
             signal: controller.signal
           });
@@ -175,6 +318,23 @@ export default function Page() {
       if (data.output) {
         typeWriterResponse(data.output, assistantMessage.id, currentSessionId);
         setRetryCount(0); // Reset retry count on success
+        
+        // Simple session activity tracking
+        if (currentUserId) {
+          try {
+            await fetch('/api/chat/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: currentSessionId,
+                messageCount: messages.length + 1, // +1 for the new message
+                lastActivity: new Date().toISOString()
+              })
+            });
+          } catch (error) {
+            console.log('Note: Session tracking unavailable:', error);
+          }
+        }
       } else {
         const noContentMessage: Message = {
           type: "assistant",
@@ -208,6 +368,49 @@ export default function Page() {
     }
   }
 
+  // Handler functions for sidebar actions
+  const handleSettingsClick = () => {
+    console.log('Settings clicked - opening settings modal');
+    setIsSettingsOpen(true);
+    setIsSidebarOpen(false); // Close sidebar when opening settings
+  };
+
+  // Handler for new chat with simple session tracking
+  const handleNewChatClick = async () => {
+    console.log('New chat clicked - creating new session');
+    
+    try {
+      const newSessionId = createNewSession(userInfo?.id);
+      setCurrentSessionId(newSessionId);
+      
+      // Simple session tracking (can be extended to full Whop integration later)
+      if (userInfo?.id) {
+        try {
+          await fetch('/api/chat/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: newSessionId,
+              messageCount: 0,
+              lastActivity: new Date().toISOString()
+            })
+          });
+          console.log('✅ Session tracking enabled');
+        } catch (error) {
+          console.log('ℹ️ Session tracking unavailable:', error);
+        }
+      }
+      
+      setIsSidebarOpen(false); // Close sidebar after creating new chat
+    } catch (error: any) {
+      console.error('Failed to create new session:', error);
+      // Show user-friendly error for subscription limits
+      setError(error.message || 'Failed to create new chat session');
+      
+      // Don't close sidebar if there was an error
+    }
+  };
+
   function handleKeyPress(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey && !disabled) {
       e.preventDefault();
@@ -217,8 +420,26 @@ export default function Page() {
 
   return (
     <div className="min-h-screen w-full bg-gray-900 text-white flex flex-col">
-      {/* Sidebar */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        userInfo={userInfo}
+        onSave={handleSettingsSave}
+      />
+
+      {/* Chat Sidebar */}
+      <ChatSidebar 
+        currentSessionId={currentSessionId}
+        onSessionSelect={switchToSession}
+        onNewChat={handleNewChatClick}
+        sessions={getSimpleSessions()}
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        onSettingsClick={handleSettingsClick}
+        onEditSession={updateSessionTitle}
+        onDeleteSession={deleteSession}
+      />
       
       {/* History Button - Top Left - Hidden when sidebar is open */}
       {!isSidebarOpen && (
@@ -355,7 +576,7 @@ export default function Page() {
                   </p>
                 </div>
               ) : (
-                // Assistant message: full-width document block
+                // Assistant message: full-width document block with markdown rendering
                 <div
                   style={{
                     width: '100%',
@@ -368,18 +589,7 @@ export default function Page() {
                     textAlign: 'left'
                   }}
                 >
-                  <div 
-                    className="whitespace-pre-wrap"
-                    style={{
-                      fontFamily: '"ABC Diatype", Helvetica, Arial, system-ui, -apple-system, sans-serif',
-                      lineHeight: '1.6',
-                      fontSize: '1rem',
-                      margin: 0,
-                      color: '#ececec'
-                    }}
-                  >
-                    {message.content}
-                  </div>
+                  <MarkdownRenderer content={message.content} />
                 </div>
               )}
             </div>
@@ -422,6 +632,7 @@ export default function Page() {
         disabled={disabled}
         placeholder={isClient ? (displayedPlaceholder + (isTyping ? '|' : '')) : placeholderTexts[0]}
         isClient={isClient}
+        isSidebarOpen={isSidebarOpen} // Pass sidebar state
       />
       
       </div> {/* End Main Chat Area */}

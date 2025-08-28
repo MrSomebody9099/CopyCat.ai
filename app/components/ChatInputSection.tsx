@@ -10,6 +10,7 @@ interface ChatInputSectionProps {
   disabled: boolean;
   placeholder: string;
   isClient: boolean;
+  isSidebarOpen?: boolean; // Add sidebar state prop
 }
 
 export default function ChatInputSection({
@@ -19,7 +20,8 @@ export default function ChatInputSection({
   generate,
   disabled,
   placeholder,
-  isClient
+  isClient,
+  isSidebarOpen = false // Default to false
 }: ChatInputSectionProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -35,7 +37,7 @@ export default function ChatInputSection({
         style={{
           position: 'fixed',
           bottom: '1.5rem',
-          left: 0,
+          left: isSidebarOpen ? '280px' : '0', // Adjust left position based on sidebar
           right: 0,
           display: 'flex',
           justifyContent: 'center',
@@ -72,7 +74,7 @@ export default function ChatInputSection({
       style={{
         position: 'fixed',
         bottom: '1.5rem',
-        left: 0,
+        left: isSidebarOpen ? '280px' : '0', // Adjust left position based on sidebar
         right: 0,
         display: 'flex',
         justifyContent: 'center',
@@ -92,7 +94,9 @@ export default function ChatInputSection({
           border: '1px solid rgba(255, 255, 255, 0.2)',
           borderRadius: '9999px',
           padding: '1rem 1.5rem',
-          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2)'
+          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2)',
+          marginLeft: 'auto',
+          marginRight: 'auto'
         }}
         suppressHydrationWarning
       >

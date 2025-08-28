@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { whopSdk } from "@/lib/whop-sdk";
+import { AssistantMemoryService } from "@/app/lib/assistant-memory";
+import { SubscriptionTierService } from "@/app/lib/subscription-tier";
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -53,7 +56,7 @@ let currentGeminiKeyIndex = 0;
 let currentGitHubModelIndex = 0;
 const providerCooldowns: Record<string, number> = {};
 const providerLastSuccess: Record<string, number> = {};
-const quotaResetTimes = {
+const quotaResetTimes: Record<string, number> = {
   gemini: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
   openrouter: 24 * 60 * 60 * 1000 // 24 hours (most models)
   // github: removed - API no longer available
@@ -172,13 +175,32 @@ console.log('💭 Conversation memory initialized (in-memory only, resets on ser
 // -------------------
 // AI Provider Functions
 // -------------------
-async function callGeminiAPI(conversationHistory: { role: "user" | "assistant"; content: string }[]): Promise<string> {
+async function callGeminiAPI(conversationHistory: { role: "user" | "assistant"; content: string }[], userInfo?: any): Promise<string> {
   const apiKey = getNextGeminiKey();
   const geminiAI = new GoogleGenerativeAI(apiKey);
   
+  // Create personalized system prompt
+  let personalizedSystem = system;
+  if (userInfo?.displayName && userInfo.displayName.trim()) {
+    personalizedSystem += `\n\nIMPORTANT USER INFO:
+- User's name: ${userInfo.displayName} (always call them by this name when greeting or addressing them!)
+- Username: ${userInfo.username || 'not available'} (for when they ask "what's my username?")
+- User ID: ${userInfo.id}${userInfo.email ? `\n- Email: ${userInfo.email} (available for email composition)` : ''}
+
+When greeting the user or starting a conversation, address them by their name: "Hey ${userInfo.displayName}!" or "Hi ${userInfo.displayName}!" Use their name naturally in conversation.`;
+  }
+  
+  // Add cross-session memory context
+  if (userInfo?.id) {
+    const memoryContext = AssistantMemoryService.generateMemoryContext(userInfo.id);
+    if (memoryContext) {
+      personalizedSystem += memoryContext;
+    }
+  }
+  
   const model = geminiAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
-    systemInstruction: system
+    systemInstruction: personalizedSystem
   });
 
   const result = await model.generateContent({
@@ -191,8 +213,27 @@ async function callGeminiAPI(conversationHistory: { role: "user" | "assistant"; 
   return result.response.text();
 }
 
-async function callOpenRouterAPI(conversationHistory: { role: "user" | "assistant"; content: string }[], model?: string): Promise<string> {
+async function callOpenRouterAPI(conversationHistory: { role: "user" | "assistant"; content: string }[], model?: string, userInfo?: any): Promise<string> {
   const selectedModel = model || getNextOpenRouterModel();
+  
+  // Create personalized system prompt
+  let personalizedSystem = system;
+  if (userInfo?.displayName && userInfo.displayName.trim()) {
+    personalizedSystem += `\n\nIMPORTANT USER INFO:
+- User's name: ${userInfo.displayName} (always call them by this name when greeting or addressing them!)
+- Username: ${userInfo.username || 'not available'} (for when they ask "what's my username?")
+- User ID: ${userInfo.id}${userInfo.email ? `\n- Email: ${userInfo.email} (available for email composition)` : ''}
+
+When greeting the user or starting a conversation, address them by their name: "Hey ${userInfo.displayName}!" or "Hi ${userInfo.displayName}!" Use their name naturally in conversation.`;
+  }
+  
+  // Add cross-session memory context
+  if (userInfo?.id) {
+    const memoryContext = AssistantMemoryService.generateMemoryContext(userInfo.id);
+    if (memoryContext) {
+      personalizedSystem += memoryContext;
+    }
+  }
   
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -204,7 +245,7 @@ async function callOpenRouterAPI(conversationHistory: { role: "user" | "assistan
     body: JSON.stringify({
       model: selectedModel,
       messages: [
-        { role: "system", content: system },
+        { role: "system", content: personalizedSystem },
         ...conversationHistory.map(m => ({
           role: m.role,
           content: m.content
@@ -254,7 +295,7 @@ async function callGitHubModelsAPI(conversationHistory: { role: "user" | "assist
   return data.choices[0]?.message?.content || "No response generated";
 }
 
-async function generateWithFailover(conversationHistory: { role: "user" | "assistant"; content: string }[]): Promise<{ response: string; provider: string; model?: string }> {
+async function generateWithFailover(conversationHistory: { role: "user" | "assistant"; content: string }[], userInfo?: any): Promise<{ response: string; provider: string; model?: string }> {
   const now = Date.now();
   
   // Always try Gemini first if available or quota should have reset
@@ -264,7 +305,7 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
       try {
         const currentKey = GEMINI_API_KEYS[currentGeminiKeyIndex];
         console.log(`🔷 Trying Gemini API with key ${currentGeminiKeyIndex + 1}/${GEMINI_API_KEYS.length}...`);
-        const response = await callGeminiAPI(conversationHistory);
+        const response = await callGeminiAPI(conversationHistory, userInfo);
         console.log(`✅ Gemini API successful with key ${currentGeminiKeyIndex + 1}`);
         markProviderSuccess("gemini");
         return { response, provider: "gemini", model: `gemini-1.5-flash-key${currentGeminiKeyIndex + 1}` };
@@ -292,7 +333,7 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
       try {
         const model = getNextOpenRouterModel();
         console.log(`🟠 Trying OpenRouter with model: ${model}`);
-        const response = await callOpenRouterAPI(conversationHistory, model);
+        const response = await callOpenRouterAPI(conversationHistory, model, userInfo);
         console.log(`✅ OpenRouter successful with ${model}`);
         markProviderSuccess("openrouter");
         return { response, provider: "openrouter", model };
@@ -320,7 +361,7 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
     if (shouldRetryProvider("gemini")) {
       console.log(`🔄 Forcing Gemini retry - quota may have reset`);
       try {
-        const response = await callGeminiAPI(conversationHistory);
+        const response = await callGeminiAPI(conversationHistory, userInfo);
         markProviderSuccess("gemini");
         return { response, provider: "gemini", model: "gemini-1.5-flash-recovered" };
       } catch (error: any) {
@@ -332,7 +373,7 @@ async function generateWithFailover(conversationHistory: { role: "user" | "assis
       console.log(`🔄 Forcing OpenRouter retry - quota may have reset`);
       try {
         const model = getNextOpenRouterModel();
-        const response = await callOpenRouterAPI(conversationHistory, model);
+        const response = await callOpenRouterAPI(conversationHistory, model, userInfo);
         markProviderSuccess("openrouter");
         return { response, provider: "openrouter", model: `${model}-recovered` };
       } catch (error: any) {
@@ -359,6 +400,107 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
     }
 
+    // Get user info for personalization
+    let userInfo = null;
+    try {
+      let userId = req.headers.get("x-whop-user-id");
+      
+      // For localhost development, use a default user ID
+      const isLocalhost = req.headers.get('host')?.includes('localhost') || 
+                         req.headers.get('host')?.includes('127.0.0.1');
+      
+      if (!userId && isLocalhost) {
+        userId = 'localhost-dev-user';
+        console.log('🔧 Using localhost development mode for AI personalization');
+      }
+      
+      if (userId) {
+        // Try to get enhanced profile data first
+        try {
+          const profileResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/user/profile`, {
+            headers: {
+              'x-whop-user-id': userId,
+              'host': req.headers.get('host') || 'localhost:3000'
+            }
+          });
+          
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            if (profileData.success && profileData.profile) {
+              userInfo = {
+                id: profileData.profile.id,
+                username: profileData.profile.username,
+                displayName: profileData.profile.displayName,
+                email: profileData.profile.email || null
+              };
+              console.log('🔍 Enhanced user profile retrieved for AI:', {
+                id: userInfo.id,
+                displayName: userInfo.displayName || '[EMPTY]',
+                email: userInfo.email ? '[SET]' : '[EMPTY]',
+                isLocalhost
+              });
+            }
+          } else {
+            console.log('❌ Profile API failed with status:', profileResponse.status);
+          }
+        } catch (profileError) {
+          console.log('⚠️ Profile API not available, falling back to basic user data:', profileError);
+        }
+        
+        // Fallback to basic Whop user data if profile API fails (but not for localhost)
+        if (!userInfo && !isLocalhost) {
+          try {
+            const user = await whopSdk.users.getUser({ userId });
+            userInfo = {
+              id: user.id,
+              username: user.username,
+              displayName: user.name
+            };
+            console.log('🔍 Basic Whop user info retrieved:', userInfo);
+          } catch (whopError) {
+            console.log('❌ Whop SDK failed:', whopError);
+          }
+        }
+        
+        // For localhost, create a basic user if profile API failed
+        if (!userInfo && isLocalhost) {
+          userInfo = {
+            id: 'localhost-dev-user',
+            username: 'dev-user',
+            displayName: 'Development User'
+          };
+          console.log('🔧 Using fallback localhost user info:', userInfo);
+        }
+      } else {
+        console.log('ℹ️ No user ID found in headers');
+      }
+    } catch (error) {
+      console.log("⚠️ Could not get user info, continuing without personalization:", error);
+    }
+
+    // Check subscription tier and usage limits
+    if (userInfo?.id) {
+      try {
+        const canSend = SubscriptionTierService.canSendMessage(userInfo.id);
+        if (!canSend.allowed) {
+          console.log(`🚫 Usage limit reached for user ${userInfo.id}: ${canSend.reason}`);
+          return NextResponse.json({ 
+            error: canSend.reason,
+            type: 'USAGE_LIMIT',
+            limit: canSend.limit,
+            current: canSend.current
+          }, { status: 429 });
+        }
+        
+        // Increment usage count
+        SubscriptionTierService.incrementMessageCount(userInfo.id);
+        console.log(`📈 Usage incremented for user ${userInfo.id}`);
+      } catch (error) {
+        console.log('⚠️ Failed to check subscription limits:', error);
+        // Continue without blocking - graceful degradation
+      }
+    }
+
     // Initialize conversation memory for this session
     if (!conversations[sessionId]) {
       conversations[sessionId] = [];
@@ -375,7 +517,7 @@ export async function POST(req: Request) {
     console.log(`💭 Full conversation history:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 50)}...`));
 
     // Generate AI response with failover
-    const { response: reply, provider, model } = await generateWithFailover(conversations[sessionId]);
+    const { response: reply, provider, model } = await generateWithFailover(conversations[sessionId], userInfo);
     
     console.log(`🎯 Response generated by: ${provider}${model ? ` (${model})` : ""}`);
 
@@ -386,6 +528,31 @@ export async function POST(req: Request) {
     console.log(`🤖 AI response:`, reply.substring(0, 100) + (reply.length > 100 ? "..." : ""));
     console.log(`📊 Final conversation state:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 30)}...`));
     console.log(`🔄 Model rotation status - OpenRouter: ${currentOpenRouterModelIndex}/${OPENROUTER_FREE_MODELS.length}, Gemini: ${currentGeminiKeyIndex}/${GEMINI_API_KEYS.length}`);
+
+    // Learn from this conversation for cross-session memory
+    if (userInfo?.id) {
+      try {
+        // Extract insights from the current conversation
+        AssistantMemoryService.extractInsights(userInfo.id, conversations[sessionId], sessionId);
+        
+        // Update user memory with profile data if available
+        if (userInfo.displayName || userInfo.email) {
+          AssistantMemoryService.learnFromProfile(userInfo.id, {
+            displayName: userInfo.displayName,
+            email: userInfo.email
+          });
+        }
+        
+        // Increment session count for new sessions
+        if (conversations[sessionId].length <= 2) { // First exchange in this session
+          AssistantMemoryService.incrementSessionCount(userInfo.id);
+        }
+        
+        console.log(`🧠 Memory updated for user ${userInfo.id}`);
+      } catch (error) {
+        console.log('⚠️ Failed to update memory:', error);
+      }
+    }
 
     return NextResponse.json({ output: reply });
   } catch (error: any) {

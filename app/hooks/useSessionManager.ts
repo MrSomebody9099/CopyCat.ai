@@ -1,10 +1,13 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { whopChatService } from '../lib/whop-chat-service';
 
 export interface Message {
   type: "user" | "assistant";
   content: string;
   id: string;
+  timestamp?: Date;
+  whopMessageId?: string;
 }
 
 export interface ChatSession {
@@ -13,6 +16,8 @@ export interface ChatSession {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  whopExperienceId?: string;
+  whopIntegrationEnabled?: boolean;
 }
 
 // In-memory storage that resets on server restart (aligns with user preferences)
@@ -40,6 +45,7 @@ function getCached<T>(key: string, fallback: () => T): T {
 export function useSessionManager() {
   const [sessions, setSessions] = useState<Map<string, ChatSession>>(globalSessions);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Initialize with first session if none exist
   useEffect(() => {
@@ -55,7 +61,28 @@ export function useSessionManager() {
     }
   }, [currentSessionId]);
 
-  const createNewSession = useCallback((): string => {
+  const createNewSession = useCallback((userId?: string): string => {
+    // Check subscription limits if userId is provided
+    if (userId) {
+      try {
+        // Import SubscriptionTierService dynamically to avoid circular dependencies
+        import('../lib/subscription-tier').then(({ SubscriptionTierService }) => {
+          const currentSessionCount = globalSessions.size;
+          const canCreate = SubscriptionTierService.canCreateSession(userId, currentSessionCount);
+          
+          if (!canCreate.allowed) {
+            console.log(`🚫 Session limit reached for user ${userId}: ${canCreate.reason}`);
+            throw new Error(canCreate.reason);
+          }
+        }).catch(error => {
+          console.log('⚠️ Failed to check session limits:', error);
+        });
+      } catch (error) {
+        console.log('⚠️ Session limit check failed:', error);
+        // Continue without blocking for graceful degradation
+      }
+    }
+    
     sessionCounter++;
     const sessionId = `session_${Date.now()}_${sessionCounter}`;
     const newSession: ChatSession = {
@@ -76,9 +103,8 @@ export function useSessionManager() {
     return getCached('simpleSessions', () => {
       const simpleSessions = new Map<string, { title: string; messages: Message[] }>();
       
-      // Limit sessions displayed for performance and filter out empty sessions
+      // Show ALL sessions (including empty ones) so users can see their chat history
       const sessionEntries = Array.from(globalSessions.entries())
-        .filter(([, session]) => session.messages.length > 0) // Only show sessions with messages
         .sort(([, a], [, b]) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .slice(0, MAX_SESSIONS_DISPLAY);
         
@@ -188,9 +214,84 @@ export function useSessionManager() {
     setCurrentSessionId(newSessionId);
   }, [createNewSession]);
 
+  // Whop Chat Integration Methods
+  const enableWhopIntegration = useCallback(async (sessionId: string, userId: string) => {
+    const session = globalSessions.get(sessionId);
+    if (!session || !userId) return false;
+
+    try {
+      const success = await whopChatService.enableWhopIntegration(userId, sessionId);
+      if (success) {
+        session.whopIntegrationEnabled = true;
+        session.whopExperienceId = whopChatService.getChatExperienceId(sessionId);
+        session.updatedAt = new Date();
+        globalSessions.set(sessionId, session);
+        setSessions(new Map(globalSessions));
+        console.log(`✅ Whop integration enabled for session: ${sessionId}`);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error enabling Whop integration:', error);
+    }
+    return false;
+  }, []);
+
+  const loadSessionFromWhop = useCallback(async (sessionId: string, userId: string) => {
+    if (!userId) return false;
+
+    try {
+      const whopMessages = await whopChatService.loadSessionFromWhop(sessionId, userId);
+      if (whopMessages) {
+        const session = globalSessions.get(sessionId);
+        if (session) {
+          session.messages = whopMessages;
+          session.whopIntegrationEnabled = true;
+          session.whopExperienceId = whopChatService.getChatExperienceId(sessionId);
+          session.updatedAt = new Date();
+          globalSessions.set(sessionId, session);
+          setSessions(new Map(globalSessions));
+          console.log(`📥 Loaded session from Whop: ${sessionId}`);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading session from Whop:', error);
+    }
+    return false;
+  }, []);
+
+  const syncSessionWithWhop = useCallback(async (sessionId: string) => {
+    const session = globalSessions.get(sessionId);
+    if (!session || !session.whopIntegrationEnabled) return false;
+
+    try {
+      const success = await whopChatService.syncLocalSessionWithWhop(sessionId, session.messages);
+      if (success) {
+        session.updatedAt = new Date();
+        globalSessions.set(sessionId, session);
+        setSessions(new Map(globalSessions));
+        console.log(`🔄 Synced session with Whop: ${sessionId}`);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error syncing session with Whop:', error);
+    }
+    return false;
+  }, []);
+
+  const isWhopIntegrationAvailable = useCallback(() => {
+    return whopChatService.isWhopIntegrationAvailable();
+  }, []);
+
+  // Set current user ID for Whop integration
+  const setUserId = useCallback((userId: string | null) => {
+    setCurrentUserId(userId);
+  }, []);
+
   return {
     sessions,
     currentSessionId,
+    currentUserId,
     createNewSession,
     addMessage,
     updateMessage,
@@ -201,6 +302,12 @@ export function useSessionManager() {
     clearAllSessions,
     getSimpleSessions,
     getSessionMessages,
-    setCurrentSessionId
+    setCurrentSessionId,
+    setUserId,
+    // Whop Chat Integration
+    enableWhopIntegration,
+    loadSessionFromWhop,
+    syncSessionWithWhop,
+    isWhopIntegrationAvailable
   };
 }
