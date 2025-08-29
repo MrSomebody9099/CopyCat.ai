@@ -507,6 +507,19 @@ export default function Page() {
           >
             CopyCat
           </h1>
+          {/* Temporary Test Button */}
+          <div className="ml-4">
+            <button
+              onClick={() => window.open('/hello-user', '_blank')}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+              style={{
+                color: '#ffffff',
+                backgroundColor: '#3b82f6',
+              }}
+            >
+              Test
+            </button>
+          </div>
         </div>
         <div 
           className="mt-2"
