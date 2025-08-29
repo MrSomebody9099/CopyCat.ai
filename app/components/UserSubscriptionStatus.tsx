@@ -55,7 +55,7 @@ export default function UserSubscriptionStatus() {
   // Always show the button for testing purposes
   return (
     <SubscriptionUpgradeButton 
-      userId={userId} 
+      userId={userId || undefined} 
       currentTier={currentTier} 
     />
   );
