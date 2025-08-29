@@ -20,9 +20,85 @@ export interface ChatSession {
   whopIntegrationEnabled?: boolean;
 }
 
-// In-memory storage that resets on server restart (aligns with user preferences)
-let globalSessions = new Map<string, ChatSession>();
-let sessionCounter = 0;
+// Local storage key for persisting sessions
+const LOCAL_STORAGE_KEY = 'copycat-chat-sessions';
+const USER_ID_KEY = 'copycat-user-id';
+
+// Load sessions from localStorage or initialize empty map
+function loadSessionsFromStorage(): Map<string, ChatSession> {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert plain objects back to Map and Date objects
+      const sessions = new Map<string, ChatSession>();
+      Object.entries(parsed).forEach(([id, sessionData]: [string, any]) => {
+        sessions.set(id, {
+          ...sessionData,
+          createdAt: new Date(sessionData.createdAt),
+          updatedAt: new Date(sessionData.updatedAt),
+          messages: sessionData.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: msg.timestamp ? new Date(msg.timestamp) : undefined
+          }))
+        });
+      });
+      return sessions;
+    }
+  } catch (error) {
+    console.error('Error loading sessions from localStorage:', error);
+  }
+  return new Map<string, ChatSession>();
+}
+
+// Save sessions to localStorage
+function saveSessionsToStorage(sessions: Map<string, ChatSession>) {
+  try {
+    // Convert Map to plain object for JSON serialization
+    const plainObject: Record<string, any> = {};
+    sessions.forEach((session, id) => {
+      plainObject[id] = {
+        ...session,
+        createdAt: session.createdAt.toISOString(),
+        updatedAt: session.updatedAt.toISOString(),
+        messages: session.messages.map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp?.toISOString()
+        }))
+      };
+    });
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plainObject));
+  } catch (error) {
+    console.error('Error saving sessions to localStorage:', error);
+  }
+}
+
+// Load user ID from localStorage
+function loadUserIdFromStorage(): string | null {
+  try {
+    return localStorage.getItem(USER_ID_KEY);
+  } catch (error) {
+    console.error('Error loading user ID from localStorage:', error);
+    return null;
+  }
+}
+
+// Save user ID to localStorage
+function saveUserIdToStorage(userId: string | null) {
+  try {
+    if (userId) {
+      localStorage.setItem(USER_ID_KEY, userId);
+    } else {
+      localStorage.removeItem(USER_ID_KEY);
+    }
+  } catch (error) {
+    console.error('Error saving user ID to localStorage:', error);
+  }
+}
+
+// Initialize sessions from storage
+let globalSessions = loadSessionsFromStorage();
+let sessionCounter = globalSessions.size > 0 ? Math.max(...Array.from(globalSessions.values()).map(s => parseInt(s.id.split('_')[1] || '0'))) : 0;
 
 // Performance constants
 const MESSAGES_PER_PAGE = 50;
@@ -45,7 +121,17 @@ function getCached<T>(key: string, fallback: () => T): T {
 export function useSessionManager() {
   const [sessions, setSessions] = useState<Map<string, ChatSession>>(globalSessions);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(loadUserIdFromStorage());
+
+  // Save sessions to localStorage whenever they change
+  useEffect(() => {
+    saveSessionsToStorage(globalSessions);
+  }, [sessions]);
+
+  // Save user ID to localStorage whenever it changes
+  useEffect(() => {
+    saveUserIdToStorage(currentUserId);
+  }, [currentUserId]);
 
   // Initialize with first session if none exist
   useEffect(() => {
@@ -56,7 +142,11 @@ export function useSessionManager() {
       // Set current session to the most recent one
       const sessionIds = Array.from(globalSessions.keys());
       if (sessionIds.length > 0 && !currentSessionId) {
-        setCurrentSessionId(sessionIds[sessionIds.length - 1]);
+        // Sort by updatedAt to get the most recent session
+        const sortedSessions = Array.from(globalSessions.entries()).sort(
+          ([, a], [, b]) => b.updatedAt.getTime() - a.updatedAt.getTime()
+        );
+        setCurrentSessionId(sortedSessions[0][0]);
       }
     }
   }, [currentSessionId]);
@@ -188,6 +278,7 @@ export function useSessionManager() {
   const deleteSession = useCallback((sessionId: string) => {
     globalSessions.delete(sessionId);
     setSessions(new Map(globalSessions));
+    saveSessionsToStorage(globalSessions);
     
     // If we deleted the current session, switch to another one or create new
     if (sessionId === currentSessionId) {
@@ -208,6 +299,7 @@ export function useSessionManager() {
       session.updatedAt = new Date();
       globalSessions.set(sessionId, session);
       setSessions(new Map(globalSessions));
+      saveSessionsToStorage(globalSessions);
     }
   }, []);
 
@@ -215,6 +307,7 @@ export function useSessionManager() {
     globalSessions.clear();
     sessionCounter = 0;
     setSessions(new Map());
+    saveSessionsToStorage(globalSessions);
     const newSessionId = createNewSession();
     setCurrentSessionId(newSessionId);
   }, [createNewSession]);
@@ -265,6 +358,7 @@ export function useSessionManager() {
         session.updatedAt = new Date();
         globalSessions.set(sessionId, session);
         setSessions(new Map(globalSessions));
+        saveSessionsToStorage(globalSessions);
         console.log(`✅ Whop integration enabled for session: ${sessionId}`);
         return true;
       }
@@ -288,6 +382,7 @@ export function useSessionManager() {
           session.updatedAt = new Date();
           globalSessions.set(sessionId, session);
           setSessions(new Map(globalSessions));
+          saveSessionsToStorage(globalSessions);
           console.log(`📥 Loaded session from Whop: ${sessionId}`);
           return true;
         }
@@ -308,6 +403,7 @@ export function useSessionManager() {
         session.updatedAt = new Date();
         globalSessions.set(sessionId, session);
         setSessions(new Map(globalSessions));
+        saveSessionsToStorage(globalSessions);
         console.log(`🔄 Synced session with Whop: ${sessionId}`);
         return true;
       }

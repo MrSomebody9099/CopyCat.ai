@@ -173,10 +173,6 @@ export default function Page() {
     updateSessionTitle
   } = useSessionManager();
   
-  // Get current session messages
-  const currentSession = getCurrentSession();
-  const messages = currentSession?.messages || [];
-  
   // Set user ID when userInfo is loaded
   useEffect(() => {
     if (userInfo?.id) {
@@ -480,6 +476,10 @@ export default function Page() {
       generate();
     }
   }
+
+  // Get current session messages
+  const currentSession = getCurrentSession();
+  const messages = currentSession?.messages || [];
 
   return (
     <div className="min-h-screen w-full bg-gray-900 text-white flex flex-col">
