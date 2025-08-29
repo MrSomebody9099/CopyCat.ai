@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from 'next/navigation';
 import ClientOnlyInput from "../../components/ClientOnlyInput";
 import ChatInputSection from "../../components/ChatInputSection";
 import HistoryButton from "../../components/HistoryButton";
@@ -27,6 +28,7 @@ const placeholderTexts = [
 ];
 
 export default function Page() {
+  const router = useRouter();
   const [userInput, setUserInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
@@ -510,7 +512,7 @@ export default function Page() {
           {/* Temporary Test Button */}
           <div className="ml-4">
             <button
-              onClick={() => window.open('/hello-user', '_blank')}
+              onClick={() => router.push('/hello-user')}
               className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
               style={{
                 color: '#ffffff',
