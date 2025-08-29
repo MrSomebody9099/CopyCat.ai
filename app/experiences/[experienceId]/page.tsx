@@ -512,7 +512,13 @@ export default function Page() {
           {/* Temporary Test Button */}
           <div className="ml-4">
             <button
-              onClick={() => router.push('/hello-user')}
+              onClick={() => {
+                // Store user info in sessionStorage before navigation
+                if (userInfo) {
+                  sessionStorage.setItem('helloUserUserInfo', JSON.stringify(userInfo));
+                }
+                router.push('/hello-user');
+              }}
               className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
               style={{
                 color: '#ffffff',

@@ -3,48 +3,59 @@
 import { useEffect, useState } from "react";
 import { whopSdk } from "@/lib/whop-sdk";
 
-export default function HelloUser() {
-  const [userName, setUserName] = useState<string>("Loading...");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface HelloUserProps {
+  initialUserName?: string;
+  initialUserId?: string;
+}
+
+export default function HelloUser({ initialUserName, initialUserId }: HelloUserProps) {
+  const [userName, setUserName] = useState<string>(initialUserName || "Loading...");
+  const [userId, setUserId] = useState<string | null>(initialUserId || null);
+  const [isLoading, setIsLoading] = useState(!initialUserName);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        // Get user information from API
-        const response = await fetch('/api/user/profile');
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log("User data:", data);
+    // Only fetch user data if not provided via props
+    if (!initialUserName && !initialUserId) {
+      async function fetchUser() {
+        try {
+          // Get user information from API
+          const response = await fetch('/api/user/profile');
           
-          if (data.success && data.profile) {
-            setUserName(data.profile.displayName || data.profile.username || "User");
-            setUserId(data.profile.id);
+          if (response.ok) {
+            const data = await response.json();
+            console.log("User data:", data);
+            
+            if (data.success && data.profile) {
+              setUserName(data.profile.displayName || data.profile.username || "User");
+              setUserId(data.profile.id);
+            } else {
+              setError("No user profile found");
+            }
+          } else if (response.status === 401) {
+            // Handle 401 error - likely due to missing authentication context
+            console.log('ℹ️ No authentication available (normal when navigating between pages)');
+            // Set a default user for development/testing
+            setUserName("Developer");
+            setUserId("localhost-dev-user");
+            setError(null); // Clear error since we have fallback data
           } else {
-            setError("No user profile found");
+            setError(`Failed to fetch user: ${response.status}`);
           }
-        } else if (response.status === 401) {
-          // Handle 401 error - likely due to missing authentication context
-          console.log('ℹ️ No authentication available (normal when navigating between pages)');
-          // Set a default user for development/testing
-          setUserName("Developer");
-          setUserId("localhost-dev-user");
-          setError(null); // Clear error since we have fallback data
-        } else {
-          setError(`Failed to fetch user: ${response.status}`);
+        } catch (err) {
+          console.error("Error fetching user:", err);
+          setError("Failed to load user data");
+        } finally {
+          setIsLoading(false);
         }
-      } catch (err) {
-        console.error("Error fetching user:", err);
-        setError("Failed to load user data");
-      } finally {
-        setIsLoading(false);
       }
+      
+      fetchUser();
+    } else {
+      // If initial data is provided, we're not loading
+      setIsLoading(false);
     }
-    
-    fetchUser();
-  }, []);
+  }, [initialUserName, initialUserId]);
 
   return (
     <div className="flex justify-center items-center h-screen px-8" style={{ background: "#1a1a1a" }}>
