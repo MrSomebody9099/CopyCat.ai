@@ -78,19 +78,26 @@ export default function Page() {
         setUserInfo({
           id: 'localhost-dev-user',
           username: 'dev-user', 
-          displayName: '',
+          displayName: 'Developer', // Better default name
           email: ''
         });
       } else {
         console.error('Failed to fetch user profile:', response.status);
+        // Fallback with a better default display name
+        setUserInfo({
+          id: 'localhost-dev-user',
+          username: 'dev-user',
+          displayName: 'Developer',
+          email: ''
+        });
       }
     } catch (error) {
       console.error('Failed to fetch user info:', error);
-      // Fallback for localhost
+      // Fallback for localhost with a better default display name
       setUserInfo({
         id: 'localhost-dev-user',
         username: 'dev-user',
-        displayName: '',
+        displayName: 'Developer',
         email: ''
       });
     }
@@ -151,6 +158,11 @@ export default function Page() {
       // Re-throw so the SettingsModal can show the error
       throw error;
     }
+  };
+
+  // Handler to refresh user info
+  const handleRefreshUserInfo = async () => {
+    await fetchUserInfo();
   };
 
   // Session management

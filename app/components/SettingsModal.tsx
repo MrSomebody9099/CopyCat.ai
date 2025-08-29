@@ -29,33 +29,79 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
+  const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
   // Initialize form data when modal opens or userInfo changes
   useEffect(() => {
     if (userInfo) {
+      // If we have userInfo, use it to initialize the form
       const initialData = {
         displayName: userInfo.displayName || '',
         email: userInfo.email || ''
       };
       setFormData(initialData);
       setOriginalData(initialData);
+    } else if (isOpen) {
+      // If modal is opening and we don't have userInfo, fetch it
+      fetchUserInfo();
     }
     
     // Fetch subscription data when modal opens
-    if (isOpen && userInfo?.id) {
+    if (isOpen && (userInfo?.id || !loadingUserInfo)) {
       fetchSubscriptionData();
     }
   }, [userInfo, isOpen]);
   
+  // Fetch user info from API
+  const fetchUserInfo = async () => {
+    setLoadingUserInfo(true);
+    try {
+      const response = await fetch('/api/user/profile');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.profile) {
+          const profileData = {
+            displayName: data.profile.displayName || data.profile.originalWhopData?.name || data.profile.username || '',
+            email: data.profile.email || ''
+          };
+          setFormData(profileData);
+          setOriginalData(profileData);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch user info:', error);
+    } finally {
+      setLoadingUserInfo(false);
+    }
+  };
+
   // Fetch subscription tier and usage data
   const fetchSubscriptionData = async () => {
-    if (!userInfo?.id) return;
+    // If we have userInfo, use its ID, otherwise fetch user info first
+    let userId = userInfo?.id;
+    
+    if (!userId) {
+      try {
+        const response = await fetch('/api/user/profile');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.profile) {
+            userId = data.profile.id;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user info for subscription data:', error);
+        return;
+      }
+    }
+    
+    if (!userId) return;
     
     setLoadingSubscription(true);
     try {
       const response = await fetch('/api/subscription?action=usage', {
         headers: {
-          'x-whop-user-id': userInfo.id
+          'x-whop-user-id': userId
         }
       });
       
@@ -124,6 +170,13 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
     onClose();
   };
 
+  const handleRefresh = async () => {
+    await fetchUserInfo();
+    if (userInfo?.id) {
+      await fetchSubscriptionData();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -180,19 +233,36 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
             >
               Settings
             </h2>
-            <button
-              onClick={handleCancel}
-              className="text-gray-400 hover:text-white transition-colors duration-200"
-              style={{
-                color: '#9ca3af',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.25rem'
-              }}
-            >
-              <X size={20} />
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={handleRefresh}
+                className="text-gray-400 hover:text-white transition-colors duration-200"
+                style={{
+                  color: '#9ca3af',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.25rem'
+                }}
+                title="Refresh user information"
+                disabled={loadingUserInfo}
+              >
+                <Settings size={20} />
+              </button>
+              <button
+                onClick={handleCancel}
+                className="text-gray-400 hover:text-white transition-colors duration-200"
+                style={{
+                  color: '#9ca3af',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.25rem'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Form */}
@@ -202,8 +272,21 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
               padding: '1.5rem'
             }}
           >
+            {/* Loading State */}
+            {loadingUserInfo && (
+              <div 
+                style={{
+                  padding: '1rem',
+                  textAlign: 'center',
+                  color: '#9ca3af'
+                }}
+              >
+                Loading user information...
+              </div>
+            )}
+
             {/* Error Message */}
-            {error && (
+            {error && !loadingUserInfo && (
               <div 
                 className="p-3 bg-red-900 border border-red-700 rounded-md text-red-200 text-sm"
                 style={{
@@ -220,7 +303,7 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
             )}
 
             {/* Success Message */}
-            {successMessage && (
+            {successMessage && !loadingUserInfo && (
               <div 
                 className="p-3 bg-green-900 border border-green-700 rounded-md text-green-200 text-sm"
                 style={{
@@ -235,184 +318,190 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
                 {successMessage}
               </div>
             )}
-            {/* Display Name Field */}
-            <div>
-              <label 
-                className="block text-sm font-medium text-gray-300 mb-2"
-                style={{
-                  display: 'block',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  color: '#d1d5db',
-                  marginBottom: '0.5rem'
-                }}
-              >
-                <User size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={formData.displayName}
-                onChange={(e) => handleInputChange('displayName', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: '#374151',
-                  border: '1px solid #4b5563',
-                  borderRadius: '0.375rem',
-                  color: '#ffffff',
-                  fontSize: '0.875rem'
-                }}
-                placeholder="Enter your display name"
-              />
-              <p 
-                className="text-xs text-gray-500 mt-1"
-                style={{
-                  fontSize: '0.75rem',
-                  color: '#6b7280',
-                  marginTop: '0.25rem'
-                }}
-              >
-                {typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 
-                  'Development mode: You can test saving settings here' :
-                  'Your display name for personalized AI responses'
-                }
-              </p>
-            </div>
-
-            {/* Subscription Tier Display */}
-            {subscriptionData && (
-              <div
-                style={{
-                  padding: '1rem',
-                  backgroundColor: subscriptionData.usage.tier === 'free' ? '#374151' : subscriptionData.usage.tier === 'premium' ? '#1e3a8a' : '#7c3aed',
-                  borderRadius: '0.5rem',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}
-              >
-                <div 
-                  className="flex items-center gap-2 mb-2"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '0.5rem'
-                  }}
-                >
-                  {subscriptionData.usage.tier === 'free' ? (
-                    <User size={16} style={{ color: '#9ca3af' }} />
-                  ) : subscriptionData.usage.tier === 'premium' ? (
-                    <Crown size={16} style={{ color: '#fbbf24' }} />
-                  ) : (
-                    <Zap size={16} style={{ color: '#a855f7' }} />
-                  )}
-                  <span 
+            
+            {/* Form Content */}
+            {!loadingUserInfo && (
+              <>
+                {/* Display Name Field */}
+                <div>
+                  <label 
+                    className="block text-sm font-medium text-gray-300 mb-2"
                     style={{
+                      display: 'block',
                       fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#ffffff',
-                      textTransform: 'capitalize'
+                      fontWeight: '500',
+                      color: '#d1d5db',
+                      marginBottom: '0.5rem'
                     }}
                   >
-                    {subscriptionData.usage.tier} Plan
-                  </span>
+                    <User size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.displayName}
+                    onChange={(e) => handleInputChange('displayName', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      backgroundColor: '#374151',
+                      border: '1px solid #4b5563',
+                      borderRadius: '0.375rem',
+                      color: '#ffffff',
+                      fontSize: '0.875rem'
+                    }}
+                    placeholder="Enter your display name"
+                  />
+                  <p 
+                    className="text-xs text-gray-500 mt-1"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#6b7280',
+                      marginTop: '0.25rem'
+                    }}
+                  >
+                    {typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 
+                      'Development mode: You can test saving settings here' :
+                      'Your display name for personalized AI responses'
+                    }
+                  </p>
                 </div>
-                
-                <div style={{ fontSize: '0.75rem', color: '#d1d5db' }}>
-                  <div style={{ marginBottom: '0.25rem' }}>
-                    Daily Messages: {subscriptionData.utilization.dailyMessages.used} / {subscriptionData.utilization.dailyMessages.limit === -1 ? '∞' : subscriptionData.utilization.dailyMessages.limit}
-                  </div>
-                  {subscriptionData.utilization.dailyMessages.limit > 0 && (
+
+                {/* Subscription Tier Display */}
+                {subscriptionData && (
+                  <div
+                    style={{
+                      padding: '1rem',
+                      backgroundColor: subscriptionData.usage.tier === 'free' ? '#374151' : subscriptionData.usage.tier === 'premium' ? '#1e3a8a' : '#7c3aed',
+                      borderRadius: '0.5rem',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}
+                  >
                     <div 
+                      className="flex items-center gap-2 mb-2"
                       style={{
-                        width: '100%',
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        borderRadius: '0.25rem',
-                        height: '0.25rem',
-                        marginTop: '0.25rem'
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginBottom: '0.5rem'
                       }}
                     >
-                      <div 
+                      {subscriptionData.usage.tier === 'free' ? (
+                        <User size={16} style={{ color: '#9ca3af' }} />
+                      ) : subscriptionData.usage.tier === 'premium' ? (
+                        <Crown size={16} style={{ color: '#fbbf24' }} />
+                      ) : (
+                        <Zap size={16} style={{ color: '#a855f7' }} />
+                      )}
+                      <span 
                         style={{
-                          width: `${Math.min(subscriptionData.utilization.dailyMessages.percentage, 100)}%`,
-                          backgroundColor: subscriptionData.utilization.dailyMessages.percentage > 80 ? '#ef4444' : '#10b981',
-                          height: '100%',
-                          borderRadius: '0.25rem',
-                          transition: 'width 0.3s ease'
+                          fontSize: '0.875rem',
+                          fontWeight: '600',
+                          color: '#ffffff',
+                          textTransform: 'capitalize'
                         }}
-                      />
+                      >
+                        {subscriptionData.usage.tier} Plan
+                      </span>
                     </div>
-                  )}
-                </div>
-                
-                {subscriptionData.usage.tier === 'free' && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                      Upgrade for unlimited messages and advanced features
-                    </span>
+                    
+                    <div style={{ fontSize: '0.75rem', color: '#d1d5db' }}>
+                      <div style={{ marginBottom: '0.25rem' }}>
+                        Daily Messages: {subscriptionData.utilization.dailyMessages.used} / {subscriptionData.utilization.dailyMessages.limit === -1 ? '∞' : subscriptionData.utilization.dailyMessages.limit}
+                      </div>
+                      {subscriptionData.utilization.dailyMessages.limit > 0 && (
+                        <div 
+                          style={{
+                            width: '100%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            borderRadius: '0.25rem',
+                            height: '0.25rem',
+                            marginTop: '0.25rem'
+                          }}
+                        >
+                          <div 
+                            style={{
+                              width: `${Math.min(subscriptionData.utilization.dailyMessages.percentage, 100)}%`,
+                              backgroundColor: subscriptionData.utilization.dailyMessages.percentage > 80 ? '#ef4444' : '#10b981',
+                              height: '100%',
+                              borderRadius: '0.25rem',
+                              transition: 'width 0.3s ease'
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {subscriptionData.usage.tier === 'free' && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                          Upgrade for unlimited messages and advanced features
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {loadingSubscription && (
-              <div 
-                style={{
-                  padding: '1rem',
-                  backgroundColor: '#374151',
-                  borderRadius: '0.5rem',
-                  textAlign: 'center',
-                  color: '#9ca3af',
-                  fontSize: '0.875rem'
-                }}
-              >
-                Loading subscription info...
-              </div>
-            )}
+                {loadingSubscription && (
+                  <div 
+                    style={{
+                      padding: '1rem',
+                      backgroundColor: '#374151',
+                      borderRadius: '0.5rem',
+                      textAlign: 'center',
+                      color: '#9ca3af',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    Loading subscription info...
+                  </div>
+                )}
 
-            {/* Email Field */}
-            <div>
-              <label 
-                className="block text-sm font-medium text-gray-300 mb-2"
-                style={{
-                  display: 'block',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  color: '#d1d5db',
-                  marginBottom: '0.5rem'
-                }}
-              >
-                <Mail size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: '#374151',
-                  border: '1px solid #4b5563',
-                  borderRadius: '0.375rem',
-                  color: '#ffffff',
-                  fontSize: '0.875rem'
-                }}
-                placeholder="Enter your email address"
-              />
-              <p 
-                className="text-xs text-gray-500 mt-1"
-                style={{
-                  fontSize: '0.75rem',
-                  color: '#6b7280',
-                  marginTop: '0.25rem'
-                }}
-              >
-                Optional: Used for enhanced AI personalization
-              </p>
-            </div>
+                {/* Email Field */}
+                <div>
+                  <label 
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      color: '#d1d5db',
+                      marginBottom: '0.5rem'
+                    }}
+                  >
+                    <Mail size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      backgroundColor: '#374151',
+                      border: '1px solid #4b5563',
+                      borderRadius: '0.375rem',
+                      color: '#ffffff',
+                      fontSize: '0.875rem'
+                    }}
+                    placeholder="Enter your email address"
+                  />
+                  <p 
+                    className="text-xs text-gray-500 mt-1"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#6b7280',
+                      marginTop: '0.25rem'
+                    }}
+                  >
+                    Optional: Used for enhanced AI personalization
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Footer */}
@@ -438,22 +527,22 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
                 cursor: 'pointer',
                 borderRadius: '0.375rem'
               }}
-              disabled={isSaving}
+              disabled={isSaving || loadingUserInfo}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={!hasChanges || isSaving}
+              disabled={!hasChanges || isSaving || loadingUserInfo}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               style={{
                 padding: '0.5rem 1rem',
-                backgroundColor: hasChanges && !isSaving ? '#2563eb' : '#4b5563',
+                backgroundColor: hasChanges && !isSaving && !loadingUserInfo ? '#2563eb' : '#4b5563',
                 border: 'none',
                 color: '#ffffff',
-                cursor: hasChanges && !isSaving ? 'pointer' : 'not-allowed',
+                cursor: hasChanges && !isSaving && !loadingUserInfo ? 'pointer' : 'not-allowed',
                 borderRadius: '0.375rem',
-                opacity: hasChanges && !isSaving ? 1 : 0.5,
+                opacity: hasChanges && !isSaving && !loadingUserInfo ? 1 : 0.5,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem'
