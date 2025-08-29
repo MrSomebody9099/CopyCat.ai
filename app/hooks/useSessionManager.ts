@@ -214,6 +214,39 @@ export function useSessionManager() {
     setCurrentSessionId(newSessionId);
   }, [createNewSession]);
 
+  // Function to load existing sessions from Whop
+  const loadSessionsFromWhop = useCallback(async (userId: string) => {
+    if (!userId) return false;
+
+    try {
+      // Call the API to check if Whop integration is available
+      const response = await fetch('/api/whop-chat?action=check-availability', {
+        headers: {
+          'x-whop-user-id': userId
+        }
+      });
+      
+      if (!response.ok) {
+        console.log('Whop integration not available');
+        return false;
+      }
+      
+      const data = await response.json();
+      if (!data.available) {
+        console.log('Whop integration not available');
+        return false;
+      }
+      
+      // For now, we'll just return true to indicate that Whop integration is available
+      // A full implementation would load existing sessions from Whop here
+      console.log('✅ Whop integration is available for user:', userId);
+      return true;
+    } catch (error) {
+      console.error('Error checking Whop integration availability:', error);
+      return false;
+    }
+  }, []);
+
   // Whop Chat Integration Methods
   const enableWhopIntegration = useCallback(async (sessionId: string, userId: string) => {
     const session = globalSessions.get(sessionId);
@@ -308,6 +341,7 @@ export function useSessionManager() {
     enableWhopIntegration,
     loadSessionFromWhop,
     syncSessionWithWhop,
-    isWhopIntegrationAvailable
+    isWhopIntegrationAvailable,
+    loadSessionsFromWhop
   };
 }

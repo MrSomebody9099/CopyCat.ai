@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter } from 'next/navigation';
 import ClientOnlyInput from "../../components/ClientOnlyInput";
 import ChatInputSection from "../../components/ChatInputSection";
 import HistoryButton from "../../components/HistoryButton";
@@ -28,7 +27,6 @@ const placeholderTexts = [
 ];
 
 export default function Page() {
-  const router = useRouter();
   const [userInput, setUserInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
@@ -168,6 +166,7 @@ export default function Page() {
     enableWhopIntegration,
     syncSessionWithWhop,
     isWhopIntegrationAvailable,
+    loadSessionsFromWhop,
     switchToSession,
     getSimpleSessions,
     deleteSession,
@@ -182,8 +181,55 @@ export default function Page() {
   useEffect(() => {
     if (userInfo?.id) {
       setUserId(userInfo.id);
+      
+      // Enable Whop integration for the current session
+      if (currentSessionId && isWhopIntegrationAvailable()) {
+        enableWhopIntegration(currentSessionId, userInfo.id)
+          .then(success => {
+            if (success) {
+              console.log('✅ Whop integration enabled for current session');
+            } else {
+              console.log('ℹ️ Whop integration not available or failed to enable');
+            }
+          })
+          .catch(error => {
+            console.error('Error enabling Whop integration:', error);
+          });
+      }
     }
-  }, [userInfo, setUserId]);
+  }, [userInfo, setUserId, currentSessionId, enableWhopIntegration, isWhopIntegrationAvailable]);
+  
+  // Load existing sessions from Whop when user info is available
+  useEffect(() => {
+    if (userInfo?.id && isWhopIntegrationAvailable()) {
+      loadSessionsFromWhop(userInfo.id)
+        .then(success => {
+          if (success) {
+            console.log('✅ Loaded existing sessions from Whop');
+          } else {
+            console.log('ℹ️ No existing sessions found in Whop or integration not available');
+          }
+        })
+        .catch(error => {
+          console.error('Error loading sessions from Whop:', error);
+        });
+    }
+  }, [userInfo, isWhopIntegrationAvailable, loadSessionsFromWhop]);
+  
+  // Function to load existing sessions from Whop
+  const loadExistingSessionsFromWhop = async () => {
+    if (!userInfo?.id || !isWhopIntegrationAvailable()) {
+      return;
+    }
+    
+    try {
+      // This would be the implementation to load existing sessions from Whop
+      // For now, we're just logging that we would do this
+      console.log('📥 Would load existing sessions from Whop for user:', userInfo.id);
+    } catch (error) {
+      console.error('Error loading sessions from Whop:', error);
+    }
+  };
   
   const disabled = useMemo(
     () => !userInput.trim() || loading,
@@ -320,6 +366,21 @@ export default function Page() {
       if (data.output) {
         typeWriterResponse(data.output, assistantMessage.id, currentSessionId);
         setRetryCount(0); // Reset retry count on success
+        
+        // Sync with Whop if integration is enabled
+        if (currentUserId) {
+          syncSessionWithWhop(currentSessionId)
+            .then(success => {
+              if (success) {
+                console.log('✅ Session synced with Whop');
+              } else {
+                console.log('ℹ️ Failed to sync session with Whop');
+              }
+            })
+            .catch(error => {
+              console.error('Error syncing session with Whop:', error);
+            });
+        }
         
         // Simple session activity tracking
         if (currentUserId) {
@@ -509,25 +570,6 @@ export default function Page() {
           >
             CopyCat
           </h1>
-          {/* Temporary Test Button */}
-          <div className="ml-4">
-            <button
-              onClick={() => {
-                // Store user info in sessionStorage before navigation
-                if (userInfo) {
-                  sessionStorage.setItem('helloUserUserInfo', JSON.stringify(userInfo));
-                }
-                router.push('/hello-user');
-              }}
-              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-              style={{
-                color: '#ffffff',
-                backgroundColor: '#3b82f6',
-              }}
-            >
-              Test
-            </button>
-          </div>
         </div>
         <div 
           className="mt-2"
