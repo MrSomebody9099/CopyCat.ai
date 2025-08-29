@@ -26,17 +26,17 @@ export interface TierLimits {
   features: string[];
 }
 
-// Tier configurations
+// Tier configurations based on user requirements
 const TIER_LIMITS: Record<string, TierLimits> = {
   free: {
-    dailyMessages: 50,
-    maxSessions: 5,
+    dailyMessages: 15, // 5 chats per conversation * 3 conversations = 15 total
+    maxSessions: 3,    // 3 conversations
     memoryRetention: 1, // 1 day memory
     features: ['basic_chat', 'basic_memory']
   },
   premium: {
-    dailyMessages: 500,
-    maxSessions: 50,
+    dailyMessages: 50, // 10 chats per conversation * 5 conversations = 50 total
+    maxSessions: 5,    // 5 conversations
     memoryRetention: 30, // 30 days memory
     features: ['basic_chat', 'advanced_memory', 'priority_support', 'unlimited_sessions']
   },
@@ -219,37 +219,7 @@ export class SubscriptionTierService {
   }
 
   /**
-   * Get usage statistics for all users (admin function)
-   */
-  static getGlobalStats(): {
-    totalUsers: number;
-    tierDistribution: Record<string, number>;
-    totalMessages: number;
-    activeToday: number;
-  } {
-    const today = new Date().toISOString().split('T')[0];
-    let totalMessages = 0;
-    let activeToday = 0;
-    const tierDistribution: Record<string, number> = { free: 0, premium: 0, pro: 0 };
-
-    for (const [, usage] of userUsageMap) {
-      totalMessages += usage.totalMessages;
-      if (usage.lastResetDate === today && usage.dailyMessageCount > 0) {
-        activeToday++;
-      }
-      tierDistribution[usage.tier] = (tierDistribution[usage.tier] || 0) + 1;
-    }
-
-    return {
-      totalUsers: userUsageMap.size,
-      tierDistribution,
-      totalMessages,
-      activeToday
-    };
-  }
-
-  /**
-   * Mock payment verification (in real app, this would integrate with Stripe/payment processor)
+   * Mock payment verification (in real app, integrate with Whop/Stripe)
    */
   static verifyPayment(userId: string, plan: 'premium' | 'pro'): { success: boolean; message: string } {
     // Mock implementation - always succeeds for demo
@@ -286,7 +256,7 @@ export class SubscriptionTierService {
         reason: 'You\'re using 80%+ of your daily message limit',
         recommendedTier: 'premium',
         benefits: [
-          '10x more daily messages (500 vs 50)',
+          '10x more daily messages (50 vs 15)',
           'Extended memory retention (30 days)',
           'Unlimited chat sessions',
           'Priority support'
@@ -314,6 +284,22 @@ export class SubscriptionTierService {
       reason: 'Your current plan meets your usage needs',
       recommendedTier: usage.tier,
       benefits: []
+    };
+  }
+
+  /**
+   * Get global stats (admin only)
+   */
+  static getGlobalStats(): { totalUsers: number; tierDistribution: Record<string, number> } {
+    const tierCounts: Record<string, number> = { free: 0, premium: 0, pro: 0 };
+    
+    userUsageMap.forEach(usage => {
+      tierCounts[usage.tier] = (tierCounts[usage.tier] || 0) + 1;
+    });
+
+    return {
+      totalUsers: userUsageMap.size,
+      tierDistribution: tierCounts
     };
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { whopSdk } from "@/lib/whop-sdk";
+import { getWhopSdk } from "@/lib/whop-sdk";
 
 // In-memory storage for custom user profile data
 // This resets on server restart (aligns with project's session management approach)
@@ -68,6 +68,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Get base user information from Whop (production only)
+    const whopSdk = getWhopSdk();
+    if (!whopSdk) {
+      return NextResponse.json(
+        { error: "Whop SDK not available. This feature only works in Whop environment." },
+        { status: 500 }
+      );
+    }
+    
     const whopUser = await whopSdk.users.getUser({ userId });
     
     // Merge Whop data with custom profile data
@@ -163,6 +171,13 @@ export async function PUT(request: NextRequest) {
     // Skip Whop user verification for localhost
     if (!isLocalhost) {
       try {
+        const whopSdk = getWhopSdk();
+        if (!whopSdk) {
+          return NextResponse.json(
+            { error: "Whop SDK not available. This feature only works in Whop environment." },
+            { status: 500 }
+          );
+        }
         await whopSdk.users.getUser({ userId });
       } catch (error) {
         return NextResponse.json(
@@ -205,18 +220,10 @@ export async function PUT(request: NextRequest) {
     // Save updated profile
     customProfiles.set(userId, updatedProfile);
 
-    console.log(`📝 User profile updated for ${userId}:`, {
-      displayName: updatedProfile.displayName,
-      email: updatedProfile.email ? '[SET]' : '[EMPTY]',
-      preferences: Object.keys(updatedProfile.preferences || {}).length + ' preferences'
-    });
-
-    // Return updated profile (excluding sensitive data)
     return NextResponse.json({
       success: true,
-      message: "Profile updated successfully",
       profile: {
-        id: userId,
+        id: updatedProfile.userId,
         displayName: updatedProfile.displayName,
         email: updatedProfile.email,
         preferences: updatedProfile.preferences,
@@ -228,79 +235,6 @@ export async function PUT(request: NextRequest) {
     console.error("Error updating user profile:", error);
     return NextResponse.json(
       { error: "Failed to update user profile" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    // Get the user ID from the request headers (set by Whop)
-    const userId = request.headers.get("x-whop-user-id");
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: "User ID not found in headers" },
-        { status: 401 }
-      );
-    }
-
-    // Remove custom profile data
-    const existed = customProfiles.delete(userId);
-
-    if (existed) {
-      console.log(`🗑️ Custom profile data deleted for user ${userId}`);
-      return NextResponse.json({
-        success: true,
-        message: "Profile data deleted successfully"
-      });
-    } else {
-      return NextResponse.json({
-        success: true,
-        message: "No custom profile data found to delete"
-      });
-    }
-
-  } catch (error) {
-    console.error("Error deleting user profile:", error);
-    return NextResponse.json(
-      { error: "Failed to delete user profile" },
-      { status: 500 }
-    );
-  }
-}
-
-// Helper function to get all custom profiles (for debugging)
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    
-    // Admin endpoint for debugging (you can remove this in production)
-    if (body.action === 'debug_list_profiles') {
-      const profiles = Array.from(customProfiles.entries()).map(([userId, profile]) => ({
-        userId,
-        displayName: profile.displayName,
-        email: profile.email ? '[SET]' : '[EMPTY]',
-        preferences: Object.keys(profile.preferences || {}).length,
-        updatedAt: profile.updatedAt
-      }));
-
-      return NextResponse.json({
-        success: true,
-        totalProfiles: profiles.length,
-        profiles
-      });
-    }
-
-    return NextResponse.json(
-      { error: "Invalid action" },
-      { status: 400 }
-    );
-
-  } catch (error) {
-    console.error("Error in profile POST endpoint:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
       { status: 500 }
     );
   }

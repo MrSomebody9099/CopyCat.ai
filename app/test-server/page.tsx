@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { whopSdk } from "@/lib/whop-sdk";
+import { getWhopSdk } from "@/lib/whop-sdk";
 
 export default async function TestServerPage() {
   try {
@@ -24,10 +24,17 @@ export default async function TestServerPage() {
     console.log("x-whop-user-id header:", userId);
     
     if (userId) {
-      // Get user information from Whop SDK
-      const userProfile = await whopSdk.users.getUser({ userId });
-      userName = userProfile.name || userProfile.username;
-      console.log("Whop user profile:", userProfile);
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        error = "Whop SDK not available. This feature only works in Whop environment.";
+        console.error(error);
+      } else {
+        // Get user information from Whop SDK
+        const userProfile = await whopSdk.users.getUser({ userId });
+        userName = userProfile.name || userProfile.username;
+        console.log("Whop user profile:", userProfile);
+      }
     } else {
       error = "No user ID found in headers";
       console.error(error);

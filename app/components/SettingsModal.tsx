@@ -124,46 +124,28 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
     setHasChanges(hasChanged);
   }, [formData, originalData]);
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
   const handleSave = async () => {
-    if (!hasChanges || isSaving) return;
-
+    if (!onSave) return;
+    
     setIsSaving(true);
     setError(null);
     setSuccessMessage(null);
     
     try {
-      if (onSave) {
-        await onSave(formData);
-        setSuccessMessage('Settings saved successfully!');
-        
-        // Update original data to reflect saved state
-        setOriginalData({ ...formData });
-        setHasChanges(false);
-        
-        // Close modal after a brief delay to show success message
-        setTimeout(() => {
-          onClose();
-          setSuccessMessage(null);
-        }, 1500);
-      }
-    } catch (error: any) {
-      console.error('Error saving settings:', error);
-      setError(error.message || 'Failed to save settings. Please try again.');
+      await onSave(formData);
+      setOriginalData(formData);
+      setHasChanges(false);
+      setSuccessMessage('Settings saved successfully!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to save settings');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleCancel = () => {
-    // Reset form to original data
-    setFormData({ ...originalData });
+    // Reset form to original values
+    setFormData(originalData);
     setHasChanges(false);
     setError(null);
     setSuccessMessage(null);
@@ -191,10 +173,11 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
           right: 0,
           bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          zIndex: 50,
+          zIndex: 200,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          overflow: 'hidden' // Added to prevent scrollbars
         }}
         onClick={handleCancel}
       >
@@ -207,151 +190,110 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
             borderRadius: '0.5rem',
             boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)',
             width: '100%',
-            maxWidth: '28rem',
-            margin: '0 1rem'
+            maxWidth: '36rem',
+            margin: '0 1rem',
+            position: 'relative',
+            zIndex: 201,
+            overflow: 'hidden'
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div 
-            className="flex items-center justify-between p-6 border-b border-gray-700"
+            className="flex items-center justify-between p-6 border-b border-gray-800"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '1.5rem',
-              borderBottom: '1px solid rgba(107, 114, 128, 0.3)'
+              borderBottom: '1px solid rgba(31, 41, 55, 0.5)'
             }}
           >
             <h2 
-              className="text-xl font-semibold text-white"
+              className="text-xl font-semibold text-white flex items-center gap-2"
               style={{
                 fontSize: '1.25rem',
                 fontWeight: '600',
-                color: '#ffffff'
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
               }}
             >
+              <Settings size={20} />
               Settings
             </h2>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={handleRefresh}
-                className="text-gray-400 hover:text-white transition-colors duration-200"
-                style={{
-                  color: '#9ca3af',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0.25rem'
-                }}
-                title="Refresh user information"
-                disabled={loadingUserInfo}
-              >
-                <Settings size={20} />
-              </button>
-              <button
-                onClick={handleCancel}
-                className="text-gray-400 hover:text-white transition-colors duration-200"
-                style={{
-                  color: '#9ca3af',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0.25rem'
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+            <button
+              onClick={handleCancel}
+              className="text-gray-400 hover:text-white transition-colors"
+              style={{
+                color: '#9ca3af',
+                transition: 'color 0.2s ease'
+              }}
+            >
+              <X size={24} />
+            </button>
           </div>
 
-          {/* Form */}
+          {/* Body */}
           <div 
-            className="p-6 space-y-4"
+            className="p-6 space-y-6"
             style={{
-              padding: '1.5rem'
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              overflow: 'hidden' // Removed max-height and overflowY to prevent scrollbars
             }}
           >
-            {/* Loading State */}
-            {loadingUserInfo && (
-              <div 
+            {/* User Info Section */}
+            <div>
+              <h3 
+                className="text-lg font-medium text-white mb-4 flex items-center gap-2"
                 style={{
-                  padding: '1rem',
-                  textAlign: 'center',
-                  color: '#9ca3af'
+                  fontSize: '1.125rem',
+                  fontWeight: '500',
+                  color: '#ffffff',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
                 }}
               >
-                Loading user information...
-              </div>
-            )}
-
-            {/* Error Message */}
-            {error && !loadingUserInfo && (
-              <div 
-                className="p-3 bg-red-900 border border-red-700 rounded-md text-red-200 text-sm"
-                style={{
-                  padding: '0.75rem',
-                  backgroundColor: '#7f1d1d',
-                  border: '1px solid #b91c1c',
-                  borderRadius: '0.375rem',
-                  color: '#fecaca',
-                  fontSize: '0.875rem'
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            {/* Success Message */}
-            {successMessage && !loadingUserInfo && (
-              <div 
-                className="p-3 bg-green-900 border border-green-700 rounded-md text-green-200 text-sm"
-                style={{
-                  padding: '0.75rem',
-                  backgroundColor: '#14532d',
-                  border: '1px solid #16a34a',
-                  borderRadius: '0.375rem',
-                  color: '#bbf7d0',
-                  fontSize: '0.875rem'
-                }}
-              >
-                {successMessage}
-              </div>
-            )}
-            
-            {/* Form Content */}
-            {!loadingUserInfo && (
-              <>
-                {/* Display Name Field */}
+                <User size={18} />
+                User Information
+              </h3>
+              
+              <div className="space-y-4">
                 <div>
                   <label 
-                    className="block text-sm font-medium text-gray-300 mb-2"
+                    htmlFor="displayName" 
+                    className="block text-sm font-medium text-gray-300 mb-1"
                     style={{
                       display: 'block',
                       fontSize: '0.875rem',
                       fontWeight: '500',
                       color: '#d1d5db',
-                      marginBottom: '0.5rem'
+                      marginBottom: '0.25rem'
                     }}
                   >
-                    <User size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
                     Display Name
                   </label>
                   <input
+                    id="displayName"
                     type="text"
                     value={formData.displayName}
-                    onChange={(e) => handleInputChange('displayName', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({...formData, displayName: e.target.value})}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{
                       width: '100%',
                       padding: '0.5rem 0.75rem',
-                      backgroundColor: '#374151',
-                      border: '1px solid #4b5563',
+                      backgroundColor: '#1f2937',
+                      border: '1px solid #374151',
                       borderRadius: '0.375rem',
                       color: '#ffffff',
-                      fontSize: '0.875rem'
+                      outline: 'none'
                     }}
-                    placeholder="Enter your display name"
                   />
                   <p 
                     className="text-xs text-gray-500 mt-1"
@@ -368,218 +310,260 @@ export default function SettingsModal({ isOpen, onClose, userInfo, onSave }: Set
                   </p>
                 </div>
 
-                {/* Subscription Tier Display */}
-                {subscriptionData && (
-                  <div
-                    style={{
-                      padding: '1rem',
-                      backgroundColor: subscriptionData.usage.tier === 'free' ? '#374151' : subscriptionData.usage.tier === 'premium' ? '#1e3a8a' : '#7c3aed',
-                      borderRadius: '0.5rem',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}
-                  >
-                    <div 
-                      className="flex items-center gap-2 mb-2"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        marginBottom: '0.5rem'
-                      }}
-                    >
-                      {subscriptionData.usage.tier === 'free' ? (
-                        <User size={16} style={{ color: '#9ca3af' }} />
-                      ) : subscriptionData.usage.tier === 'premium' ? (
-                        <Crown size={16} style={{ color: '#fbbf24' }} />
-                      ) : (
-                        <Zap size={16} style={{ color: '#a855f7' }} />
-                      )}
-                      <span 
-                        style={{
-                          fontSize: '0.875rem',
-                          fontWeight: '600',
-                          color: '#ffffff',
-                          textTransform: 'capitalize'
-                        }}
-                      >
-                        {subscriptionData.usage.tier} Plan
-                      </span>
-                    </div>
-                    
-                    <div style={{ fontSize: '0.75rem', color: '#d1d5db' }}>
-                      <div style={{ marginBottom: '0.25rem' }}>
-                        Daily Messages: {subscriptionData.utilization.dailyMessages.used} / {subscriptionData.utilization.dailyMessages.limit === -1 ? '∞' : subscriptionData.utilization.dailyMessages.limit}
-                      </div>
-                      {subscriptionData.utilization.dailyMessages.limit > 0 && (
-                        <div 
-                          style={{
-                            width: '100%',
-                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '0.25rem',
-                            height: '0.25rem',
-                            marginTop: '0.25rem'
-                          }}
-                        >
-                          <div 
-                            style={{
-                              width: `${Math.min(subscriptionData.utilization.dailyMessages.percentage, 100)}%`,
-                              backgroundColor: subscriptionData.utilization.dailyMessages.percentage > 80 ? '#ef4444' : '#10b981',
-                              height: '100%',
-                              borderRadius: '0.25rem',
-                              transition: 'width 0.3s ease'
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    
-                    {subscriptionData.usage.tier === 'free' && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                          Upgrade for unlimited messages and advanced features
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {loadingSubscription && (
-                  <div 
-                    style={{
-                      padding: '1rem',
-                      backgroundColor: '#374151',
-                      borderRadius: '0.5rem',
-                      textAlign: 'center',
-                      color: '#9ca3af',
-                      fontSize: '0.875rem'
-                    }}
-                  >
-                    Loading subscription info...
-                  </div>
-                )}
-
-                {/* Email Field */}
                 <div>
                   <label 
-                    className="block text-sm font-medium text-gray-300 mb-2"
+                    htmlFor="email" 
+                    className="block text-sm font-medium text-gray-300 mb-1"
                     style={{
                       display: 'block',
                       fontSize: '0.875rem',
                       fontWeight: '500',
                       color: '#d1d5db',
-                      marginBottom: '0.5rem'
+                      marginBottom: '0.25rem'
                     }}
                   >
-                    <Mail size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
                     Email
                   </label>
                   <input
+                    id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{
                       width: '100%',
                       padding: '0.5rem 0.75rem',
-                      backgroundColor: '#374151',
-                      border: '1px solid #4b5563',
+                      backgroundColor: '#1f2937',
+                      border: '1px solid #374151',
                       borderRadius: '0.375rem',
                       color: '#ffffff',
-                      fontSize: '0.875rem'
+                      outline: 'none'
                     }}
-                    placeholder="Enter your email address"
                   />
-                  <p 
-                    className="text-xs text-gray-500 mt-1"
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription Tier Display */}
+            {subscriptionData && (
+              <div
+                style={{
+                  padding: '1rem',
+                  backgroundColor: subscriptionData.usage.tier === 'free' ? '#374151' : subscriptionData.usage.tier === 'premium' ? '#1e3a8a' : '#7c3aed',
+                  borderRadius: '0.5rem',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                <div 
+                  className="flex items-center gap-2 mb-2"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '0.5rem'
+                  }}
+                >
+                  {subscriptionData.usage.tier === 'free' ? (
+                    <User size={16} style={{ color: '#9ca3af' }} />
+                  ) : subscriptionData.usage.tier === 'premium' ? (
+                    <Crown size={16} style={{ color: '#fbbf24' }} />
+                  ) : (
+                    <Zap size={16} style={{ color: '#a855f7' }} />
+                  )}
+                  <span 
                     style={{
-                      fontSize: '0.75rem',
-                      color: '#6b7280',
-                      marginTop: '0.25rem'
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      color: '#ffffff',
+                      textTransform: 'capitalize'
                     }}
                   >
-                    Optional: Used for enhanced AI personalization
-                  </p>
+                    {subscriptionData.usage.tier} Plan
+                  </span>
                 </div>
-              </>
+                
+                <div style={{ fontSize: '0.75rem', color: '#d1d5db' }}>
+                  <div style={{ marginBottom: '0.25rem' }}>
+                    Daily Messages: {subscriptionData.utilization.dailyMessages.used} / {subscriptionData.utilization.dailyMessages.limit === -1 ? '∞' : subscriptionData.utilization.dailyMessages.limit}
+                  </div>
+                  <div style={{ marginBottom: '0.25rem' }}>
+                    Sessions: {subscriptionData.usage.sessions?.length || 0} / {subscriptionData.limits.maxSessions === -1 ? '∞' : subscriptionData.limits.maxSessions}
+                  </div>
+                  <div>
+                    Memory Retention: {subscriptionData.limits.memoryRetention} day{subscriptionData.limits.memoryRetention !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                
+                {subscriptionData.utilization.dailyMessages.percentage > 80 && subscriptionData.usage.tier === 'free' && (
+                  <div 
+                    style={{
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.75rem',
+                      color: '#fbbf24'
+                    }}
+                  >
+                    ⚠️ You're approaching your daily limit. Consider upgrading for more messages.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Features based on tier */}
+            {subscriptionData && (
+              <div>
+                <h4 
+                  className="text-md font-medium text-white mb-2"
+                  style={{
+                    fontSize: '1rem',
+                    fontWeight: '500',
+                    color: '#ffffff',
+                    marginBottom: '0.5rem'
+                  }}
+                >
+                  Plan Features
+                </h4>
+                <ul 
+                  className="space-y-1 text-sm text-gray-300"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
+                    fontSize: '0.875rem',
+                    color: '#d1d5db'
+                  }}
+                >
+                  {subscriptionData.utilization.features.map((feature: string, index: number) => (
+                    <li 
+                      key={index} 
+                      className="flex items-center gap-2"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                    >
+                      <span style={{ color: '#10b981' }}>✓</span>
+                      {feature.replace(/_/g, ' ')}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div 
+                className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm"
+                style={{
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(127, 29, 29, 0.5)',
+                  border: '1px solid #b91c1c',
+                  borderRadius: '0.5rem',
+                  color: '#fecaca',
+                  fontSize: '0.875rem'
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {successMessage && (
+              <div 
+                className="p-3 bg-green-900/50 border border-green-700 rounded-lg text-green-200 text-sm"
+                style={{
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(21, 128, 61, 0.5)',
+                  border: '1px solid #16a34a',
+                  borderRadius: '0.5rem',
+                  color: '#bbf7d0',
+                  fontSize: '0.875rem'
+                }}
+              >
+                {successMessage}
+              </div>
             )}
           </div>
 
           {/* Footer */}
           <div 
-            className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700"
+            className="flex items-center justify-between p-6 border-t border-gray-800"
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '0.75rem',
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid rgba(107, 114, 128, 0.3)'
+              justifyContent: 'space-between',
+              padding: '1.5rem',
+              borderTop: '1px solid rgba(31, 41, 55, 0.5)'
             }}
           >
             <button
-              onClick={handleCancel}
-              className="px-4 py-2 text-gray-300 hover:text-white transition-colors duration-200"
+              onClick={handleRefresh}
+              disabled={loadingUserInfo || loadingSubscription}
+              className="px-4 py-2 text-gray-300 hover:text-white transition-colors text-sm"
               style={{
                 padding: '0.5rem 1rem',
-                backgroundColor: 'transparent',
-                border: 'none',
                 color: '#d1d5db',
-                cursor: 'pointer',
-                borderRadius: '0.375rem'
-              }}
-              disabled={isSaving || loadingUserInfo}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || isSaving || loadingUserInfo}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: hasChanges && !isSaving && !loadingUserInfo ? '#2563eb' : '#4b5563',
-                border: 'none',
-                color: '#ffffff',
-                cursor: hasChanges && !isSaving && !loadingUserInfo ? 'pointer' : 'not-allowed',
-                borderRadius: '0.375rem',
-                opacity: hasChanges && !isSaving && !loadingUserInfo ? 1 : 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
+                fontSize: '0.875rem',
+                transition: 'color 0.2s ease'
               }}
             >
-              {isSaving ? (
-                <>
-                  <div 
-                    style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid transparent',
-                      borderTop: '2px solid #ffffff',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }}
-                  />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save size={16} />
-                  Save Changes
-                </>
-              )}
+              {loadingUserInfo || loadingSubscription ? 'Refreshing...' : 'Refresh'}
             </button>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancel}
+                disabled={isSaving}
+                className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#374151',
+                  color: '#ffffff',
+                  borderRadius: '0.375rem',
+                  transition: 'background-color 0.2s ease'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !hasChanges}
+                className={`px-4 py-2 rounded-md transition-colors text-sm flex items-center gap-2 ${
+                  hasChanges 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                }`}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: hasChanges ? '#2563eb' : '#374151',
+                  color: hasChanges ? '#ffffff' : '#9ca3af',
+                  borderRadius: '0.375rem',
+                  transition: 'background-color 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: hasChanges ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Save
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* CSS for loading spinner animation */}
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </>
   );
 }

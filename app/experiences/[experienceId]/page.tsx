@@ -6,6 +6,7 @@ import HistoryButton from "../../components/HistoryButton";
 import ChatSidebar from "../../components/ChatSidebar";
 import SettingsModal from "../../components/SettingsModal";
 import MarkdownRenderer from "../../components/MarkdownRenderer";
+import UserSubscriptionStatus from "../../components/UserSubscriptionStatus";
 import { useSessionManager, Message } from "../../hooks/useSessionManager";
 import { 
   handleApiError, 
@@ -559,16 +560,18 @@ export default function Page() {
       )}
               
       {/* Header */}
-      <header className="py-4">
+      <header className="py-4 relative">
         <div 
-          className="flex items-center justify-center w-full"
+          className="flex items-center justify-between w-full px-4"
           style={{
             width: '100%',
             display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center'
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '0 1rem'
           }}
         >
+          <div></div> {/* Empty div for flex space-between to work */}
           <h1 
             className="text-3xl font-semibold tracking-wide"
             style={{
@@ -582,6 +585,9 @@ export default function Page() {
           >
             CopyCat
           </h1>
+          <div>
+            <UserSubscriptionStatus />
+          </div>
         </div>
         <div 
           className="mt-2"

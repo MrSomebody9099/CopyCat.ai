@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { whopSdk } from "@/lib/whop-sdk";
+import { getWhopSdk } from "@/lib/whop-sdk";
 import { AssistantMemoryService } from "@/app/lib/assistant-memory";
 import { SubscriptionTierService } from "@/app/lib/subscription-tier";
 
@@ -450,13 +450,16 @@ export async function POST(req: Request) {
         // Fallback to basic Whop user data if profile API fails (but not for localhost)
         if (!userInfo && !isLocalhost) {
           try {
-            const user = await whopSdk.users.getUser({ userId });
-            userInfo = {
-              id: user.id,
-              username: user.username,
-              displayName: user.name
-            };
-            console.log('🔍 Basic Whop user info retrieved:', userInfo);
+            const whopSdk = getWhopSdk();
+            if (whopSdk) {
+              const user = await whopSdk.users.getUser({ userId });
+              userInfo = {
+                id: user.id,
+                username: user.username,
+                displayName: user.name
+              };
+              console.log('🔍 Basic Whop user info retrieved:', userInfo);
+            }
           } catch (whopError) {
             console.log('❌ Whop SDK failed:', whopError);
           }
@@ -526,7 +529,7 @@ export async function POST(req: Request) {
     
     console.log(`✅ AI response saved. Total messages for ${sessionId}:`, conversations[sessionId].length);
     console.log(`🤖 AI response:`, reply.substring(0, 100) + (reply.length > 100 ? "..." : ""));
-    console.log(`📊 Final conversation state:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(0, 30)}...`));
+    console.log(`📊 Final conversation state:`, conversations[sessionId].map((m, i) => `${i + 1}. ${m.role}: ${m.content.substring(30)}...`));
     console.log(`🔄 Model rotation status - OpenRouter: ${currentOpenRouterModelIndex}/${OPENROUTER_FREE_MODELS.length}, Gemini: ${currentGeminiKeyIndex}/${GEMINI_API_KEYS.length}`);
 
     // Learn from this conversation for cross-session memory

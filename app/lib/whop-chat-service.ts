@@ -1,4 +1,4 @@
-import { whopSdk } from "@/lib/whop-sdk";
+import { getWhopSdk } from "@/lib/whop-sdk";
 
 // Types for Whop chat integration
 interface WhopChatExperience {
@@ -83,6 +83,13 @@ export class WhopChatService {
         return null;
       }
 
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop chat features disabled.');
+        return null;
+      }
+
       // Create chat experience
       const result = await whopSdk.messages.findOrCreateChat({
         accessPassId,
@@ -115,6 +122,13 @@ export class WhopChatService {
    */
   async getMessagesFromChat(experienceId: string): Promise<WhopMessage[]> {
     try {
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop chat features disabled.');
+        return [];
+      }
+
       const result = await whopSdk.messages.listMessagesFromChat({
         chatExperienceId: experienceId
       });
@@ -136,6 +150,13 @@ export class WhopChatService {
    */
   async sendMessageToChat(experienceId: string, message: string): Promise<string | null> {
     try {
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop chat features disabled.');
+        return null;
+      }
+
       const result = await whopSdk.messages.sendMessageToChat({
         experienceId,
         message
@@ -200,105 +221,45 @@ export class WhopChatService {
         return cachedAccessPassId;
       }
 
-      // For demo purposes, we'll use a placeholder access pass ID
-      // In a real implementation, you would:
-      // 1. Have a predefined access pass ID for your app
-      // 2. Or query the user's access passes if they have specific ones
-      // 3. Or create a new access pass for the user
-      
-      // Using the companyId from the SDK config as a fallback
-      // In a real app, you would use an actual access pass ID
-      const accessPassId = process.env.NEXT_PUBLIC_WHOP_DEFAULT_ACCESS_PASS_ID || 
-                          process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || 
-                          'prod_demo_access_pass';
-      
-      this.accessPassCache.set(userId, accessPassId);
-      return accessPassId;
-
-    } catch (error) {
-      console.error('Error handling access pass:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Sync local session data with Whop chat
-   */
-  async syncLocalSessionWithWhop(
-    sessionId: string, 
-    localMessages: Array<{ type: 'user' | 'assistant'; content: string; id: string }>
-  ): Promise<boolean> {
-    try {
-      const experienceId = this.chatExperiences.get(sessionId);
-      if (!experienceId) {
-        console.log('No Whop chat experience found for session:', sessionId);
-        return false;
-      }
-
-      // Get existing Whop messages
-      const whopMessages = await this.getMessagesFromChat(experienceId);
-      const existingMessageCount = whopMessages.length;
-
-      // Send any new local messages to Whop
-      const newMessages = localMessages.slice(existingMessageCount);
-      
-      for (const message of newMessages) {
-        await this.sendMessageToChat(experienceId, `[${message.type.toUpperCase()}]: ${message.content}`);
-      }
-
-      console.log(`🔄 Synced ${newMessages.length} messages to Whop chat`);
-      return true;
-
-    } catch (error) {
-      console.error('Error syncing with Whop chat:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Load session from Whop chat
-   */
-  async loadSessionFromWhop(sessionId: string, userId: string): Promise<Array<{
-    type: 'user' | 'assistant';
-    content: string;
-    id: string;
-  }> | null> {
-    try {
-      // Try to find existing chat experience
-      const experienceId = this.chatExperiences.get(sessionId);
-      if (!experienceId) {
-        console.log('No existing Whop chat experience for session:', sessionId);
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop access pass features disabled.');
         return null;
       }
 
-      // Get messages from Whop
-      const whopMessages = await this.getMessagesFromChat(experienceId);
-      const convertedMessages = this.convertWhopMessagesToInternal(whopMessages);
-
-      console.log(`📥 Loaded ${convertedMessages.length} messages from Whop chat`);
-      return convertedMessages;
-
+      // In a real implementation, you would create or find an access pass
+      // For now, we'll use a placeholder
+      const accessPassId = "prod_AJiW8eRocqzjg"; // Your product ID
+      this.accessPassCache.set(userId, accessPassId);
+      
+      return accessPassId;
     } catch (error) {
-      console.error('Error loading session from Whop:', error);
+      console.error('Error getting or creating access pass:', error);
       return null;
     }
   }
 
   /**
-   * Enable Whop chat integration for a session
+   * Enable Whop integration for a specific session
    */
   async enableWhopIntegration(userId: string, sessionId: string): Promise<boolean> {
     try {
-      const chatExperience = await this.findOrCreateChatExperience(userId, sessionId, {
-        name: `CopyCat.ai Chat - ${new Date().toLocaleDateString()}`,
-        whoCanPost: 'everyone'
-      });
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop integration disabled.');
+        return false;
+      }
 
-      if (chatExperience) {
-        console.log(`✅ Whop integration enabled for session: ${sessionId}`);
+      // Try to find or create a chat experience for this session
+      const chatExperience = await this.findOrCreateChatExperience(userId, sessionId);
+      
+      if (chatExperience && chatExperience.id) {
+        console.log(`✅ Whop integration enabled for session: ${sessionId} with experience: ${chatExperience.id}`);
         return true;
       } else {
-        console.log(`❌ Failed to enable Whop integration for session: ${sessionId}`);
+        console.warn(`Failed to create Whop chat experience for session: ${sessionId}`);
         return false;
       }
     } catch (error) {
@@ -312,19 +273,101 @@ export class WhopChatService {
    */
   isWhopIntegrationAvailable(): boolean {
     try {
-      // Check if we have the necessary SDK methods
-      return !!(
-        whopSdk && 
-        whopSdk.messages &&
-        typeof whopSdk.messages.findOrCreateChat === 'function' && 
-        typeof whopSdk.messages.listMessagesFromChat === 'function' && 
-        typeof whopSdk.messages.sendMessageToChat === 'function'
-      );
-    } catch {
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      return !!whopSdk;
+    } catch (error) {
+      console.error('Error checking Whop integration availability:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Load a session from Whop chat
+   */
+  async loadSessionFromWhop(sessionId: string, userId: string): Promise<Array<{
+    type: 'user' | 'assistant';
+    content: string;
+    id: string;
+    timestamp: Date;
+    whopMessageId?: string;
+  }> | null> {
+    try {
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop chat features disabled.');
+        return null;
+      }
+
+      // Get chat experience ID for this session
+      const experienceId = this.chatExperiences.get(sessionId);
+      if (!experienceId) {
+        console.warn(`No chat experience found for session: ${sessionId}`);
+        return null;
+      }
+
+      // Get messages from Whop chat
+      const whopMessages = await this.getMessagesFromChat(experienceId);
+      
+      // Convert to our internal format
+      const internalMessages = this.convertWhopMessagesToInternal(whopMessages);
+      
+      console.log(`📥 Loaded ${internalMessages.length} messages from Whop for session: ${sessionId}`);
+      return internalMessages;
+    } catch (error) {
+      console.error('Error loading session from Whop:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sync local session with Whop chat
+   */
+  async syncLocalSessionWithWhop(sessionId: string, localMessages: Array<{
+    type: 'user' | 'assistant';
+    content: string;
+    id: string;
+    timestamp?: Date;
+    whopMessageId?: string;
+  }>): Promise<boolean> {
+    try {
+      // Get the Whop SDK instance
+      const whopSdk = getWhopSdk();
+      if (!whopSdk) {
+        console.warn('Whop SDK not available. Whop chat features disabled.');
+        return false;
+      }
+
+      // Get chat experience ID for this session
+      const experienceId = this.chatExperiences.get(sessionId);
+      if (!experienceId) {
+        console.warn(`No chat experience found for session: ${sessionId}`);
+        return false;
+      }
+
+      // Filter out messages that are already synced (have whopMessageId)
+      const unsyncedMessages = localMessages.filter(msg => !msg.whopMessageId && msg.type === 'user');
+      
+      // Send unsynced messages to Whop chat
+      let successCount = 0;
+      for (const message of unsyncedMessages) {
+        const result = await this.sendMessageToChat(experienceId, message.content);
+        if (result) {
+          successCount++;
+        }
+      }
+      
+      console.log(`🔄 Synced ${successCount}/${unsyncedMessages.length} messages to Whop for session: ${sessionId}`);
+      return successCount === unsyncedMessages.length;
+    } catch (error) {
+      console.error('Error syncing session with Whop:', error);
       return false;
     }
   }
 }
 
-// Export singleton instance
+// Export a singleton instance
 export const whopChatService = WhopChatService.getInstance();
+
+

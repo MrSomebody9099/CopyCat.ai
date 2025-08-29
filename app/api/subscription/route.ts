@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SubscriptionTierService } from "@/app/lib/subscription-tier";
+import { getWhopSdk } from "@/lib/whop-sdk";
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,9 +100,59 @@ export async function GET(request: NextRequest) {
           limits: tierInfo
         });
 
+      case 'check-access':
+        if (!userId) {
+          return NextResponse.json(
+            { error: "User ID required" },
+            { status: 400 }
+          );
+        }
+
+        // Check if user has access to the premium product
+        try {
+          const whopSdk = getWhopSdk();
+          if (!whopSdk) {
+            // In localhost development, simulate access check
+            if (isLocalhost) {
+              return NextResponse.json({
+                success: true,
+                hasAccess: userId === 'localhost-dev-user' ? false : true,
+                tier: userId === 'localhost-dev-user' ? 'free' : 'premium'
+              });
+            }
+            throw new Error("Whop SDK not available");
+          }
+
+          const hasAccess = await whopSdk.access.checkIfUserHasAccessToAccessPass({
+            accessPassId: "prod_AJiW8eRocqzjg", // Your product ID
+            userId: userId
+          });
+          
+          return NextResponse.json({
+            success: true,
+            hasAccess,
+            tier: hasAccess ? 'premium' : 'free'
+          });
+        } catch (error) {
+          console.error("Error checking access:", error);
+          // In localhost development, provide fallback response
+          if (isLocalhost) {
+            return NextResponse.json({
+              success: true,
+              hasAccess: false,
+              tier: 'free',
+              message: "Simulated response for localhost development"
+            });
+          }
+          return NextResponse.json({
+            success: false,
+            error: "Failed to check access"
+          }, { status: 500 });
+        }
+
       default:
         return NextResponse.json(
-          { error: "Invalid action. Use: usage, can-send-message, can-create-session, upgrade-recommendations, global-stats, tier-info" },
+          { error: "Invalid action. Use: usage, can-send-message, can-create-session, upgrade-recommendations, global-stats, tier-info, check-access" },
           { status: 400 }
         );
     }
@@ -169,14 +220,51 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Mock payment verification (in real app, integrate with Stripe)
-        const paymentResult = SubscriptionTierService.verifyPayment(userId, plan);
-        
-        return NextResponse.json({
-          success: paymentResult.success,
-          message: paymentResult.message,
-          tier: plan
-        });
+        // Handle payment verification
+        try {
+          const whopSdk = getWhopSdk();
+          if (!whopSdk) {
+            // In localhost development, simulate payment verification
+            if (isLocalhost) {
+              return NextResponse.json({
+                success: true,
+                verified: true,
+                message: "Payment verified (simulated for localhost development)"
+              });
+            }
+            throw new Error("Whop SDK not available");
+          }
+
+          // Create checkout session
+          const checkoutSession = await whopSdk.payments.createCheckoutSession({
+            planId: "plan_uGs96XPxv08dR", // Use the plan ID directly
+            successUrl: `${request.headers.get('origin')}/success`,
+            cancelUrl: `${request.headers.get('origin')}/cancel`,
+          });
+
+          if (!checkoutSession) {
+            throw new Error("Failed to create checkout session");
+          }
+
+          return NextResponse.json({
+            success: true,
+            checkoutUrl: checkoutSession.id, // Use the ID instead of url
+          });
+        } catch (error) {
+          console.error("Error creating checkout session:", error);
+          // In localhost development, provide fallback response
+          if (isLocalhost) {
+            return NextResponse.json({
+              success: true,
+              checkoutUrl: "/success", // Simulate successful checkout
+              message: "Checkout session created (simulated for localhost development)"
+            });
+          }
+          return NextResponse.json({
+            success: false,
+            error: "Failed to create checkout session"
+          }, { status: 500 });
+        }
 
       default:
         return NextResponse.json(
@@ -186,23 +274,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error("Error updating subscription:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    // For future subscription modifications like pause/resume
-    return NextResponse.json({
-      success: false,
-      message: "Subscription modifications not yet implemented"
-    });
-  } catch (error) {
-    console.error("Error modifying subscription:", error);
+    console.error("Error in subscription POST API:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

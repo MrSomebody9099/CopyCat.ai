@@ -1,116 +1,100 @@
-# CopyCat.ai - Whop App
+# CopyCat AI 🐾
 
-A modern, beginner-friendly Whop application built with Next.js and the official Whop SDK.
+All-in-one AI copywriter that helps you create amazing content with the power of AI.
 
-## ✨ Features
+## Features
 
-- **Dark Theme UI** - Beautiful black background with orange accents
-- **Whop Authentication** - Built-in user authentication and management
-- **Modern Design** - Clean, minimalist interface using Tailwind CSS
-- **Easy to Expand** - Well-structured codebase for future development
-- **TypeScript Support** - Full type safety and IntelliSense
+- AI-powered copy generation
+- Whop integration for subscription management
+- Dynamic experience rendering
+- Chat-based interface
+- Personalized AI responses
 
-## 🚀 Quick Start
+## Subscription Tiers
 
-### 1. Install Dependencies
+### Free Tier
+- 5 chats per conversation
+- 3 conversations
+- 15 chats per user per day
+- 1 day memory retention
 
-```bash
-pnpm install
-```
+### Paid Tier ($9/week)
+- 10 chats per conversation
+- 5 conversations
+- 50 chats per user per day
+- 30 days memory retention
+- Priority support
 
-### 2. Set Up Environment Variables
+### Agency/Business (Coming Soon)
+- Unlimited chats per conversation
+- Unlimited conversations
+- Unlimited chats per user per day
+- 1 year memory retention
+- Custom solutions
+- Dedicated support
 
-Copy the `env.example` file to `.env` and fill in your Whop credentials:
+## Whop Integration
 
-```bash
-cp env.example .env
-```
+This app is designed to work within the Whop ecosystem. To set up subscriptions:
 
-Then edit `.env` with your actual values from the [Whop Dashboard](https://whop.com/dashboard):
+1. Create an access pass in your Whop dashboard
+2. Create a pricing plan for the access pass
+3. Update the product ID and plan ID in your environment variables:
+   - `NEXT_PUBLIC_PREMIUM_PRODUCT_ID` - Your access pass ID
+   - `NEXT_PUBLIC_PREMIUM_PLAN_ID` - Your pricing plan ID
+
+## Environment Variables
+
+Create a `.env.local` file with the following variables:
 
 ```env
-# Required: Your Whop App API Key
-WHOP_API_KEY=your_actual_api_key_here
+# Whop Integration
+NEXT_PUBLIC_WHOP_APP_ID=your_whop_app_id
+WHOP_API_KEY=your_whop_api_key
+NEXT_PUBLIC_WHOP_AGENT_USER_ID=your_agent_user_id
+NEXT_PUBLIC_WHOP_COMPANY_ID=your_company_id
 
-# Required: Your Whop App ID  
-NEXT_PUBLIC_WHOP_APP_ID=your_actual_app_id_here
+# Subscription Product Information
+NEXT_PUBLIC_PREMIUM_PRODUCT_ID=prod_AJiW8eRocqzjg
+NEXT_PUBLIC_PREMIUM_PLAN_ID=plan_uGs96XPxv08dR
 
-# Required: Your Whop Company ID
-NEXT_PUBLIC_WHOP_COMPANY_ID=your_actual_company_id_here
-
-# Required: Agent User ID for API requests
-NEXT_PUBLIC_WHOP_AGENT_USER_ID=your_actual_agent_user_id_here
+# AI Providers
+GEMINI_API_KEY=your_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
-### 3. Run the Development Server
+## Getting Started
 
-```bash
-pnpm dev
-```
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-**Important**: Always use `pnpm dev` (not `next dev`) to run the Whop proxy server.
+2. Set up environment variables (see above)
 
-### 4. Access Your App
+3. Run the development server:
+   ```bash
+   pnpm dev
+   ```
 
-- Open the Whop dashboard
-- Navigate to your app
-- The app will run in the Whop iframe with proper authentication
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## 🏗️ Project Structure
+## Whop Integration Details
 
-```
-├── app/                    # Next.js app directory
-│   ├── api/               # API routes
-│   ├── discover/          # Discover page
-│   ├── experiences/       # Experiences page
-│   ├── layout.tsx         # Root layout with WhopApp wrapper
-│   ├── page.tsx           # Main landing page
-│   └── globals.css        # Global styles
-├── lib/                   # Utility functions
-│   └── whop-sdk.ts       # Whop SDK configuration
-├── env.example            # Environment variables template
-└── package.json           # Dependencies and scripts
-```
+The app uses the Whop iframe SDK for authentication and in-app purchases:
 
-## 🔧 Key Components
+1. **Authentication**: The app automatically handles user authentication through Whop's iframe SDK
+2. **Subscription Management**: Users can upgrade their plans using the capsule-shaped button with multi-color stars
+3. **In-App Purchases**: The subscription button uses Whop's `inAppPurchase` function to process payments
+4. **User Information**: User profile information is retrieved through the Whop API
 
-### WhopApp Wrapper
-The `WhopApp` component in `app/layout.tsx` provides authentication context throughout your app.
+## Deployment
 
-### Whop SDK
-The `lib/whop-sdk.ts` file configures the Whop server SDK for API calls.
+Deploy to Vercel or any Next.js compatible hosting platform.
 
-### Authentication
-User authentication is handled automatically by the Whop SDK. Users are authenticated when they access your app through the Whop dashboard.
+Make sure to set all environment variables in your hosting platform's dashboard.
 
-## 🎨 Customization
+## Learn More
 
-### Theme Colors
-The app uses a dark theme with orange accents:
-- Background: `bg-black`
-- Cards: `bg-gray-900` with `border-gray-800`
-- Accents: `bg-orange-500`, `text-orange-400`
-- Text: `text-white`, `text-gray-300`
-
-### Adding New Pages
-1. Create a new directory in `app/`
-2. Add a `page.tsx` file
-3. The page will automatically inherit the WhopApp wrapper and authentication
-
-### API Routes
-Add new API endpoints in `app/api/` directory. They'll have access to the Whop SDK for authenticated requests.
-
-## 📚 Resources
-
-- [Whop Developer Documentation](https://dev.whop.com)
-- [Whop Dashboard](https://whop.com/dashboard)
+- [Whop Developer Documentation](https://docs.whop.com)
 - [Next.js Documentation](https://nextjs.org/docs)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-## 🤝 Support
-
-Need help? Check out the [Whop Documentation](https://dev.whop.com) or reach out to the Whop developer community.
-
-## 📝 License
-
-This project is based on the official Whop Next.js template.
