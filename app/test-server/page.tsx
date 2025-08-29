@@ -5,8 +5,14 @@ export default async function TestServerPage() {
   // Get the header list
   const headersList = headers();
   
-  // Log all headers for debugging
-  console.log("Server Headers:", Object.fromEntries(headersList.entries()));
+  // Log all headers for debugging - using get method for each header
+  const headerObj: Record<string, string | null> = {};
+  // Common headers to check
+  const headerNames = ['host', 'referer', 'x-whop-user-id', 'user-agent'];
+  headerNames.forEach(name => {
+    headerObj[name] = headersList.get(name) || null;
+  });
+  console.log("Server Headers:", headerObj);
   
   let userName = "Unknown";
   let error = null;
@@ -70,4 +76,3 @@ export default async function TestServerPage() {
       </div>
     </div>
   );
-}
