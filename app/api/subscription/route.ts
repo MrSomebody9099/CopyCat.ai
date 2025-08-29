@@ -238,8 +238,6 @@ export async function POST(request: NextRequest) {
           // Create checkout session
           const checkoutSession = await whopSdk.payments.createCheckoutSession({
             planId: "plan_uGs96XPxv08dR", // Use the plan ID directly
-            successUrl: `${request.headers.get('origin')}/success`,
-            cancelUrl: `${request.headers.get('origin')}/cancel`,
           });
 
           if (!checkoutSession) {
