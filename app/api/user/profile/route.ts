@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       const userProfile = {
         id: userId,
         username: 'dev-user',
-        displayName: customProfile?.displayName || '',  // Empty by default so users set their name
+        displayName: customProfile?.displayName || 'Developer',  // Better default for testing
         email: customProfile?.email || '',
         preferences: customProfile?.preferences || {},
         updatedAt: customProfile?.updatedAt || null,
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const userProfile = {
       id: whopUser.id,
       username: whopUser.username,
-      displayName: customProfile?.displayName || whopUser.name || '',
+      displayName: customProfile?.displayName || whopUser.name || whopUser.username || 'User',
       email: customProfile?.email || '',
       preferences: customProfile?.preferences || {},
       updatedAt: customProfile?.updatedAt || null,
