@@ -17,12 +17,22 @@ const customProfiles = new Map<string, CustomUserProfile>();
 
 export async function GET(request: NextRequest) {
   try {
+    // Log all headers for debugging
+    console.log('🔍 All request headers:');
+    request.headers.forEach((value, key) => {
+      console.log(`  ${key}: ${value}`);
+    });
+    
     // Get the user ID from the request headers (set by Whop)
     let userId = request.headers.get("x-whop-user-id");
     
     // For localhost development, use a default user ID
     const isLocalhost = request.headers.get('host')?.includes('localhost') || 
                        request.headers.get('host')?.includes('127.0.0.1');
+    
+    console.log('🌐 Host:', request.headers.get('host'));
+    console.log('🔧 Is localhost:', isLocalhost);
+    console.log('👤 User ID from header:', userId);
     
     if (!userId && isLocalhost) {
       userId = 'localhost-dev-user';
@@ -91,12 +101,22 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Log all headers for debugging
+    console.log('🔍 All request headers (PUT):');
+    request.headers.forEach((value, key) => {
+      console.log(`  ${key}: ${value}`);
+    });
+    
     // Get the user ID from the request headers (set by Whop)
     let userId = request.headers.get("x-whop-user-id");
     
     // For localhost development, use a default user ID
     const isLocalhost = request.headers.get('host')?.includes('localhost') || 
                        request.headers.get('host')?.includes('127.0.0.1');
+    
+    console.log('🌐 Host (PUT):', request.headers.get('host'));
+    console.log('🔧 Is localhost (PUT):', isLocalhost);
+    console.log('👤 User ID from header (PUT):', userId);
     
     if (!userId && isLocalhost) {
       userId = 'localhost-dev-user';
