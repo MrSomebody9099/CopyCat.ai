@@ -76,7 +76,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, sessionId, messages } = await request.json();
+    const body = await request.json();
+    const { action, sessionId, messages } = body;
     const userId = request.headers.get("x-whop-user-id");
 
     if (!userId) {
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
         });
 
       case 'send-message':
-        const { message, experienceId } = await request.json();
+        const { message, experienceId } = body;
         if (!message || !experienceId) {
           return NextResponse.json(
             { error: "Message and experienceId are required" },
@@ -150,7 +151,8 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { sessionId, experienceId } = await request.json();
+    const body = await request.json();
+    const { sessionId } = body;
     const userId = request.headers.get("x-whop-user-id");
 
     if (!userId) {

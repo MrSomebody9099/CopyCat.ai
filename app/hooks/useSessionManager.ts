@@ -149,8 +149,13 @@ export function useSessionManager() {
       cache.clear();
       
       setSessions(new Map(globalSessions));
+      
+      // Sync with Whop if integration is enabled
+      if (session.whopIntegrationEnabled && currentUserId) {
+        syncSessionWithWhop(sessionId);
+      }
     }
-  }, []);
+  }, [currentUserId]);
 
   // Update existing message content (for streaming responses)
   const updateMessage = useCallback((sessionId: string, messageId: string, newContent: string) => {
@@ -295,7 +300,7 @@ export function useSessionManager() {
 
   const syncSessionWithWhop = useCallback(async (sessionId: string) => {
     const session = globalSessions.get(sessionId);
-    if (!session || !session.whopIntegrationEnabled) return false;
+    if (!session || !session.whopIntegrationEnabled || !currentUserId) return false;
 
     try {
       const success = await whopChatService.syncLocalSessionWithWhop(sessionId, session.messages);
@@ -310,7 +315,7 @@ export function useSessionManager() {
       console.error('Error syncing session with Whop:', error);
     }
     return false;
-  }, []);
+  }, [currentUserId]);
 
   const isWhopIntegrationAvailable = useCallback(() => {
     return whopChatService.isWhopIntegrationAvailable();

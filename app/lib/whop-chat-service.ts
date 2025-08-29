@@ -167,7 +167,9 @@ export class WhopChatService {
     return whopMessages.map(msg => {
       // Determine if this is a user or assistant message
       // You might need to adjust this logic based on your bot's user ID
-      const isAssistant = msg.messageType === 'automated' || msg.user.username === 'copycat-ai';
+      const isAssistant = msg.messageType === 'automated' || 
+                         msg.user.username.includes('copycat') || 
+                         msg.user.username.includes('assistant');
       
       return {
         type: isAssistant ? 'assistant' : 'user',
@@ -187,8 +189,8 @@ export class WhopChatService {
   }
 
   /**
-   * Helper method to get or create access pass (simplified)
-   * In a real implementation, you'd need to handle access pass creation properly
+   * Helper method to get or create access pass
+   * This implementation uses a simplified approach for demo purposes
    */
   private async getOrCreateAccessPass(userId: string): Promise<string | null> {
     try {
@@ -198,15 +200,20 @@ export class WhopChatService {
         return cachedAccessPassId;
       }
 
+      // For demo purposes, we'll use a placeholder access pass ID
       // In a real implementation, you would:
-      // 1. Query user's existing access passes
-      // 2. Find one that allows chat creation
-      // 3. Or create a new access pass if needed
+      // 1. Have a predefined access pass ID for your app
+      // 2. Or query the user's access passes if they have specific ones
+      // 3. Or create a new access pass for the user
       
-      // For now, we'll return null and fall back to local storage
-      // This would need to be implemented based on your specific Whop setup
-      console.warn('Access pass handling not implemented - falling back to local storage');
-      return null;
+      // Using the companyId from the SDK config as a fallback
+      // In a real app, you would use an actual access pass ID
+      const accessPassId = process.env.NEXT_PUBLIC_WHOP_DEFAULT_ACCESS_PASS_ID || 
+                          process.env.NEXT_PUBLIC_WHOP_COMPANY_ID || 
+                          'prod_demo_access_pass';
+      
+      this.accessPassCache.set(userId, accessPassId);
+      return accessPassId;
 
     } catch (error) {
       console.error('Error handling access pass:', error);
